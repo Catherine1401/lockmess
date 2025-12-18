@@ -1,14 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lockmess/core/theme/colors.dart';
+import 'package:lockmess/features/data/login_repository_imp.dart';
 import 'package:lockmess/features/presentation/widgets/form_login.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:simple_gradient_text/simple_gradient_text.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends ConsumerWidget {
   const LoginScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return Padding(
       padding: const EdgeInsetsGeometry.symmetric(horizontal: 40),
       child: Column(
@@ -78,7 +80,11 @@ class LoginScreen extends StatelessWidget {
                   shape: BoxShape.circle,
                   border: ShadBorder.all(color: AppColors.black200, width: 1),
                 ),
-                onPressed: () {},
+                onPressed: () async {
+                  final loginProvider = ref.read(loginRepositoryProvider);
+                  final user = await loginProvider.signInWithGoogle();
+                  print(user.email);
+                },
                 child: SvgPicture.asset(
                   'assets/icons/google.svg',
                   width: 24,
