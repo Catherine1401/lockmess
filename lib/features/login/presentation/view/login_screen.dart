@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:lockmess/core/theme/colors.dart';
-import 'package:lockmess/features/data/login_repository_imp.dart';
-import 'package:lockmess/features/presentation/widgets/form_login.dart';
+import 'package:lockmess/core/constants/colors.dart';
+import 'package:lockmess/features/login/data/repositories/login_repository_imp.dart';
+import 'package:lockmess/features/login/presentation/widgets/form_login.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:simple_gradient_text/simple_gradient_text.dart';
 

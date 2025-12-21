@@ -2,13 +2,11 @@ import 'dart:async';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_sign_in/google_sign_in.dart';
-import 'package:lockmess/features/domain/login_repository.dart';
+import 'package:lockmess/core/network/supabase.dart';
+import 'package:lockmess/features/login/domain/repositories/login_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
-import 'package:lockmess/features/domain/user.dart' as User;
+import 'package:lockmess/features/login/domain/entities/user.dart' as User;
 
-final supabase = Provider<Supabase>((ref) {
-  return Supabase.instance;
-});
 
 final loginRepositoryProvider = Provider<LoginRepositoryImp>((ref) {
   return LoginRepositoryImp(ref.read(supabase));

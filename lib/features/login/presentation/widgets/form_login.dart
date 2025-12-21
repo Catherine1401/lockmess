@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:lockmess/core/theme/colors.dart';
+import 'package:lockmess/core/constants/colors.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class FormLogin extends StatefulWidget {
@@ -62,6 +62,7 @@ class _FormLoginState extends State<FormLogin> {
           // password
           ShadInputFormField(
             id: 'password',
+            keyboardType: TextInputType.visiblePassword,
             placeholder: Text(
               'Enter your password',
               style: ShadTheme.of(context).textTheme.h4,

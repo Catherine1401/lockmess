@@ -1,18 +1,27 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:lockmess/core/theme/colors.dart';
+import 'package:lockmess/core/constants/colors.dart';
 import 'package:lockmess/router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final router = ref.watch(routerProvider);
     return ShadApp.router(
       debugShowCheckedModeBanner: false,
       theme: ShadThemeData(
         textTheme: ShadTextTheme(
+          custom: {
+            'labelBottomNav': GoogleFonts.roboto(
+              fontWeight: FontWeight.w500,
+              fontSize: 12,
+              letterSpacing: 0,
+            ),
+          },
           h1Large: GoogleFonts.roboto(
             fontWeight: FontWeight.w700,
             fontSize: 50,
