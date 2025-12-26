@@ -21,6 +21,35 @@ class MyApp extends ConsumerWidget {
               fontSize: 12,
               letterSpacing: 0,
             ),
+            'titleAppbar': GoogleFonts.roboto(
+              fontWeight: FontWeight.w700,
+              fontSize: 32,
+            ),
+            'nameProfile': GoogleFonts.roboto(
+              fontWeight: FontWeight.w500,
+              fontSize: 24,
+              color: AppColors.black900,
+            ),
+            'usernameProfile': GoogleFonts.roboto(
+              fontWeight: FontWeight.w500,
+              fontSize: 14,
+              color: AppColors.gray400,
+            ),
+            'titleProfile': GoogleFonts.roboto(
+              fontWeight: FontWeight.w400,
+              fontSize: 15,
+              color: AppColors.gray300,
+            ),
+            'contentProfile': GoogleFonts.roboto(
+              fontWeight: FontWeight.w500,
+              fontSize: 15,
+              color: AppColors.black900,
+            ),
+            'logoutProfile': GoogleFonts.roboto(
+              fontWeight: FontWeight.w500,
+              fontSize: 18,
+              color: AppColors.black900,
+            ),
           },
           h1Large: GoogleFonts.roboto(
             fontWeight: FontWeight.w700,

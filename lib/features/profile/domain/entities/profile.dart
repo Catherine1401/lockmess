@@ -1,5 +1,3 @@
-import 'package:lockmess/features/profile/domain/entities/hobby.dart';
-
 final class Profile {
   final String id;
   final String displayName;
@@ -7,7 +5,9 @@ final class Profile {
   final String phone;
   final String gender;
   final String email;
-  final List<Hobby> hobbies;
+  final String avatarUrl;
+  final String birthday;
+  final List<String> hobbies;
 
   Profile({
     required this.id,
@@ -16,6 +16,8 @@ final class Profile {
     required this.phone,
     required this.gender,
     required this.email,
+    required this.avatarUrl,
+    required this.birthday,
     required this.hobbies,
   });
 }

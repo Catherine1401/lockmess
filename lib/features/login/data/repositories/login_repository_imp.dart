@@ -7,7 +7,6 @@ import 'package:lockmess/features/login/domain/repositories/login_repository.dar
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:lockmess/features/login/domain/entities/user.dart' as User;
 
-
 final loginRepositoryProvider = Provider<LoginRepositoryImp>((ref) {
   return LoginRepositoryImp(ref.read(supabase));
 });
@@ -21,8 +20,6 @@ class LoginRepositoryImp implements LoginRepository {
   Future<User.User> signInWithGoogle() async {
     const webClientId = String.fromEnvironment('WEB_CLIENT_ID');
     const iosClientId = String.fromEnvironment('IOS_CLIENT_ID');
-    print(webClientId);
-    print(iosClientId);
 
     final scopes = ['email', 'profile'];
     final googleSignIn = GoogleSignIn.instance;
@@ -40,7 +37,6 @@ class LoginRepositoryImp implements LoginRepository {
     final accessToken = googleAuthorization!.accessToken;
 
     if (idToken == null) {
-      print('no id token found!');
       throw 'no id token found!';
     }
 
@@ -53,16 +49,9 @@ class LoginRepositoryImp implements LoginRepository {
     final user = authResponse.user;
 
     if (user == null) {
-      print('user null');
       throw 'user null';
     }
 
     return User.User(email: user.email!);
-  }
-
-  @override
-  Future<void> signOut() {
-    // TODO: implement signOut
-    throw UnimplementedError();
   }
 }
