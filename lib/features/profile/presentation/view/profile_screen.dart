@@ -22,7 +22,7 @@ class ProfileScreen extends ConsumerWidget {
         context,
         ref,
       ),
-      _ => CircularProgressIndicator(),
+      _ => Center(child: CircularProgressIndicator.adaptive()),
     };
   }
 

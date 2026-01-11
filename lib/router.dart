@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lockmess/core/network/supabase.dart';
 import 'package:lockmess/core/widgets/root_screen.dart';
+import 'package:lockmess/features/friends/presentation/friend_screen.dart';
 import 'package:lockmess/features/login/presentation/view/login_screen.dart';
 import 'package:lockmess/features/profile/presentation/view/profile_screen.dart';
 import 'package:lockmess/test.dart';
@@ -18,25 +19,37 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/chat',
     // refreshListenable: ValueNotifier(authState),
     routes: <RouteBase>[
+      // login 
       GoRoute(path: '/', builder: (_, _) => const LoginScreen()),
+
+      // friends
+      GoRoute(path: '/friend', builder: (_, _) => const FriendScreen()),
       StatefulShellRoute.indexedStack(
         branches: <StatefulShellBranch>[
+          // chat
           StatefulShellBranch(
             navigatorKey: _chatNavigatorKey,
             routes: <RouteBase>[
               GoRoute(path: '/chat', builder: (_, _) => const Test()),
             ],
           ),
+
+          // group
           StatefulShellBranch(
             navigatorKey: _groupNavigatorKey,
             routes: <RouteBase>[
               GoRoute(path: '/group', builder: (_, _) => Text('group')),
             ],
           ),
+          
+          // profile
           StatefulShellBranch(
             navigatorKey: _profileNavigatorKey,
             routes: <RouteBase>[
-              GoRoute(path: '/profile', builder: (_, _) => ProfileScreen()),
+              GoRoute(
+                path: '/profile',
+                builder: (_, _) => const ProfileScreen(),
+              ),
             ],
           ),
         ],

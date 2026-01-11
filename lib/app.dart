@@ -50,6 +50,16 @@ class MyApp extends ConsumerWidget {
               fontSize: 18,
               color: AppColors.black900,
             ),
+            'quantityFrinds': GoogleFonts.poppins(
+              fontWeight: FontWeight.w600,
+              fontSize: 24, 
+              color: AppColors.black900,
+            ),
+            'inSearch': GoogleFonts.poppins(
+              fontWeight: FontWeight.w400, 
+              fontSize: 16, 
+              color: AppColors.white900,
+            ),
           },
           h1Large: GoogleFonts.roboto(
             fontWeight: FontWeight.w700,

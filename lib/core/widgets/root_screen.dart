@@ -84,7 +84,7 @@ class RootScreen extends ConsumerWidget {
     // final currentIndex = navigationShell.currentIndex;
     return Expanded(
       child: Material(
-        child: InkWell(
+        child: InkResponse(
           onTap: () {
             navigationShell.goBranch(index);
             ref.read(bottomNavProvider.notifier).changeTab(index);
@@ -129,69 +129,84 @@ class RootScreen extends ConsumerWidget {
       ),
       actions: <Widget>[
         // add frind
-        GestureDetector(
-          onTap: () {},
-          child: Stack(
-            clipBehavior: Clip.none,
-            children: [
-              SvgPicture.asset(
-                'assets/icons/friend.svg',
-                colorFilter: ColorFilter.mode(
-                  AppColors.green500,
-                  BlendMode.srcIn,
-                ),
-              ),
-              Positioned(
-                top: -5,
-                right: -5,
-                child: SvgPicture.asset(
-                  'assets/icons/plus.svg',
-                  colorFilter: ColorFilter.mode(
-                    AppColors.green500,
-                    BlendMode.srcIn,
+        Material(
+          color: Colors.transparent,
+          child: InkResponse(
+            onTap: () {
+              context.push('/friend');
+            },
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  SvgPicture.asset(
+                    'assets/icons/friend.svg',
+                    colorFilter: ColorFilter.mode(
+                      AppColors.green500,
+                      BlendMode.srcIn,
+                    ),
                   ),
-                ),
+                  Positioned(
+                    top: -5,
+                    right: -5,
+                    child: SvgPicture.asset(
+                      'assets/icons/plus.svg',
+                      colorFilter: ColorFilter.mode(
+                        AppColors.green500,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
         ),
         const SizedBox(width: 28),
         // three dot
-        GestureDetector(
-          onTap: () {},
-          child: SizedBox(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SvgPicture.asset(
-                  'assets/icons/dot.svg',
-                  colorFilter: ColorFilter.mode(
-                    AppColors.green500,
-                    BlendMode.srcIn,
-                  ),
+        Material(
+          color: Colors.transparent,
+          child: InkResponse(
+            onTap: () {},
+            radius: 60,
+            child: Padding(
+              padding: const EdgeInsets.all(8.0),
+              child: SizedBox(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SvgPicture.asset(
+                      'assets/icons/dot.svg',
+                      colorFilter: ColorFilter.mode(
+                        AppColors.green500,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    SvgPicture.asset(
+                      'assets/icons/dot.svg',
+                      colorFilter: ColorFilter.mode(
+                        AppColors.green500,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    SvgPicture.asset(
+                      'assets/icons/dot.svg',
+                      colorFilter: ColorFilter.mode(
+                        AppColors.green500,
+                        BlendMode.srcIn,
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 3),
-                SvgPicture.asset(
-                  'assets/icons/dot.svg',
-                  colorFilter: ColorFilter.mode(
-                    AppColors.green500,
-                    BlendMode.srcIn,
-                  ),
-                ),
-                const SizedBox(height: 3),
-                SvgPicture.asset(
-                  'assets/icons/dot.svg',
-                  colorFilter: ColorFilter.mode(
-                    AppColors.green500,
-                    BlendMode.srcIn,
-                  ),
-                ),
-              ],
+              ),
             ),
           ),
         ),
       ],
-      actionsPadding: EdgeInsets.only(right: 22),
+      actionsPadding: const EdgeInsets.only(right: 22),
     );
   }
 }
