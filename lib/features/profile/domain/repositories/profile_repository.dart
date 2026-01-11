@@ -1,4 +1,4 @@
-import 'package:lockmess/features/profile/domain/entities/profile.dart';
+import 'package:lockmess/core/domain/entities/profile.dart';
 
 abstract interface class ProfileRepository {
   Future<void> logout();

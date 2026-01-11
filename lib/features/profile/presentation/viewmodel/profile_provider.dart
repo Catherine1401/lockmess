@@ -3,7 +3,7 @@ import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lockmess/core/network/supabase.dart';
 import 'package:lockmess/features/profile/data/repositoties/profile_repository_impl.dart';
-import 'package:lockmess/features/profile/domain/entities/profile.dart';
+import 'package:lockmess/core/domain/entities/profile.dart';
 
 final profileProvider = AsyncNotifierProvider<ProfileNotifier, Profile>(() {
   return ProfileNotifier();

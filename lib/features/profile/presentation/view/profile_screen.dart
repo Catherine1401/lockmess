@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lockmess/core/constants/colors.dart';
 import 'package:lockmess/core/widgets/root_screen.dart';
 import 'package:lockmess/features/profile/data/repositoties/profile_repository_impl.dart';
-import 'package:lockmess/features/profile/domain/entities/profile.dart';
+import 'package:lockmess/core/domain/entities/profile.dart';
 import 'package:lockmess/features/profile/presentation/viewmodel/profile_provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
@@ -284,7 +284,7 @@ class ProfileScreen extends ConsumerWidget {
 
   Widget _buildLogout(BuildContext context, WidgetRef ref) {
     return ShadButton(
-      gap: 16, 
+      gap: 16,
       backgroundColor: AppColors.green450,
       padding: EdgeInsets.symmetric(horizontal: 42),
       onPressed: () {

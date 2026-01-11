@@ -6,6 +6,9 @@ import 'package:lockmess/core/widgets/root_screen.dart';
 import 'package:lockmess/features/friends/presentation/friend_screen.dart';
 import 'package:lockmess/features/login/presentation/view/login_screen.dart';
 import 'package:lockmess/features/profile/presentation/view/profile_screen.dart';
+import 'package:lockmess/features/friends/presentation/view/search_friend_screen.dart';
+import 'package:lockmess/features/friends/presentation/view/user_profile_screen.dart';
+import 'package:lockmess/core/domain/entities/profile.dart';
 import 'package:lockmess/test.dart';
 
 final _chatNavigatorKey = GlobalKey<NavigatorState>();
@@ -19,11 +22,22 @@ final routerProvider = Provider<GoRouter>((ref) {
     initialLocation: '/chat',
     // refreshListenable: ValueNotifier(authState),
     routes: <RouteBase>[
-      // login 
+      // login
       GoRoute(path: '/', builder: (_, _) => const LoginScreen()),
 
       // friends
       GoRoute(path: '/friend', builder: (_, _) => const FriendScreen()),
+      GoRoute(
+        path: '/search-friend',
+        builder: (_, _) => const SearchFriendScreen(),
+      ),
+      GoRoute(
+        path: '/user-profile',
+        builder: (_, state) {
+          final profile = state.extra as Profile;
+          return UserProfileScreen(profile: profile);
+        },
+      ),
       StatefulShellRoute.indexedStack(
         branches: <StatefulShellBranch>[
           // chat
@@ -41,7 +55,7 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(path: '/group', builder: (_, _) => Text('group')),
             ],
           ),
-          
+
           // profile
           StatefulShellBranch(
             navigatorKey: _profileNavigatorKey,

@@ -1,7 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lockmess/core/network/supabase.dart';
 import 'package:lockmess/core/utils/get_user_info.dart';
-import 'package:lockmess/features/profile/domain/entities/profile.dart';
+import 'package:lockmess/core/domain/entities/profile.dart';
 import 'package:lockmess/features/profile/domain/repositories/profile_repository.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
