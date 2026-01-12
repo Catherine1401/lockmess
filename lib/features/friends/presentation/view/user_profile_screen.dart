@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 import 'package:lockmess/core/constants/colors.dart';
 import 'package:lockmess/core/domain/entities/profile.dart';
 import 'package:lockmess/features/friends/presentation/viewmodel/friend_provider.dart';
+import 'package:lockmess/features/chats/presentation/viewmodel/chat_provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class UserProfileScreen extends ConsumerWidget {
@@ -184,8 +185,19 @@ class UserProfileScreen extends ConsumerWidget {
                 const SizedBox(width: 12),
                 Expanded(
                   child: ElevatedButton(
-                    onPressed: () {
+                    onPressed: () async {
                       // Navigate to chat
+                      try {
+                        final conversation = await ref
+                            .read(chatControllerProvider)
+                            .getOrCreateConversation(targetId);
+                        if (context.mounted) {
+                          context.push('/chat/${conversation.id}');
+                        }
+                      } catch (e) {
+                        // Handle error
+                        print('Error opening chat: $e');
+                      }
                     },
                     style: ElevatedButton.styleFrom(
                       backgroundColor: AppColors.green500,

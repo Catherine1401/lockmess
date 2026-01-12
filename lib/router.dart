@@ -9,6 +9,8 @@ import 'package:lockmess/features/profile/presentation/view/profile_screen.dart'
 import 'package:lockmess/features/friends/presentation/view/search_friend_screen.dart';
 import 'package:lockmess/features/friends/presentation/view/user_profile_screen.dart';
 import 'package:lockmess/core/domain/entities/profile.dart';
+import 'package:lockmess/features/chats/presentation/chats_screen.dart';
+import 'package:lockmess/features/chats/presentation/view/chat_screen.dart';
 import 'package:lockmess/test.dart';
 
 final _chatNavigatorKey = GlobalKey<NavigatorState>();
@@ -38,13 +40,20 @@ final routerProvider = Provider<GoRouter>((ref) {
           return UserProfileScreen(profile: profile);
         },
       ),
+      GoRoute(
+        path: '/chat/:conversationId',
+        builder: (_, state) {
+          final conversationId = state.pathParameters['conversationId']!;
+          return ChatScreen(conversationId: conversationId);
+        },
+      ),
       StatefulShellRoute.indexedStack(
         branches: <StatefulShellBranch>[
           // chat
           StatefulShellBranch(
             navigatorKey: _chatNavigatorKey,
             routes: <RouteBase>[
-              GoRoute(path: '/chat', builder: (_, _) => const Test()),
+              GoRoute(path: '/chat', builder: (_, _) => const ChatsScreen()),
             ],
           ),
 
