@@ -11,6 +11,7 @@ import 'package:lockmess/features/friends/presentation/view/user_profile_screen.
 import 'package:lockmess/core/domain/entities/profile.dart';
 import 'package:lockmess/features/chats/presentation/chats_screen.dart';
 import 'package:lockmess/features/chats/presentation/view/chat_screen.dart';
+import 'package:lockmess/features/profile/presentation/view/edit_profile_screen.dart';
 import 'package:lockmess/test.dart';
 
 final _chatNavigatorKey = GlobalKey<NavigatorState>();
@@ -45,6 +46,13 @@ final routerProvider = Provider<GoRouter>((ref) {
         builder: (_, state) {
           final conversationId = state.pathParameters['conversationId']!;
           return ChatScreen(conversationId: conversationId);
+        },
+      ),
+      GoRoute(
+        path: '/profile/edit',
+        builder: (_, state) {
+          final profile = state.extra as Profile;
+          return EditProfileScreen(initialProfile: profile);
         },
       ),
       StatefulShellRoute.indexedStack(

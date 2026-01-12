@@ -20,7 +20,9 @@ base mixin GetUserInfo {
     final realHobbies = hobbies.first['hobbies'] as List;
     print('data type of realhobbbies: ${realHobbies.runtimeType}');
     print('value of realhobbies: $realHobbies');
-    print('datatype of first item realhobbies: ${realHobbies.first.runtimeType}');
+    print(
+      'datatype of first item realhobbies: ${realHobbies.first.runtimeType}',
+    );
     return realHobbies.map((e) {
       return switch (e) {
         {'name': String name} => name,
@@ -45,38 +47,20 @@ base mixin GetUserInfo {
         'Trường $key: giá trị = $value, kiểu dữ liệu = ${value.runtimeType}',
       );
     });
-    return switch (rawUser) {
-      {
-        'id': String id,
-        'display_name': String displayName,
-        'username': String username,
-        'phone': String phone,
-        'gender': String gender,
-        'email': String email,
-        'avatar_url': String avatarUrl,
-        'birthday': String birthday,
-      } =>
-        (
-          id: id,
-          displayName: displayName,
-          username: username,
-          phone: phone,
-          gender: gender,
-          email: email,
-          avatarUrl: avatarUrl,
-          birthday: birthday == '1800-01-01' ? '' : parseBirthday(birthday),
-        ),
-      _ => (
-        id: '',
-        displayName: '',
-        username: '',
-        phone: '',
-        gender: '',
-        email: '',
-        avatarUrl: '',
-        birthday: '',
-      ),
-    };
+
+    // Handle nullable fields with proper defaults
+    return (
+      id: rawUser['id'] as String? ?? '',
+      displayName: rawUser['display_name'] as String? ?? '',
+      username: rawUser['username'] as String? ?? '',
+      phone: rawUser['phone'] as String? ?? '',
+      gender: rawUser['gender'] as String? ?? '',
+      email: rawUser['email'] as String? ?? '',
+      avatarUrl: rawUser['avatar_url'] as String? ?? '',
+      birthday: (rawUser['birthday'] as String? ?? '1800-01-01') == '1800-01-01'
+          ? ''
+          : parseBirthday(rawUser['birthday'] as String),
+    );
   }
 
   String parseBirthday(String birthday) {

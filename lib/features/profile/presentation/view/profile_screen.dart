@@ -6,6 +6,7 @@ import 'package:lockmess/core/widgets/root_screen.dart';
 import 'package:lockmess/features/profile/data/repositoties/profile_repository_impl.dart';
 import 'package:lockmess/core/domain/entities/profile.dart';
 import 'package:lockmess/features/profile/presentation/viewmodel/profile_provider.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
 class ProfileScreen extends ConsumerWidget {
@@ -36,7 +37,20 @@ class ProfileScreen extends ConsumerWidget {
             mainAxisAlignment: MainAxisAlignment.end,
             children: [
               InkWell(
-                onTap: () {},
+                onTap: () async {
+                  final result = await context.push(
+                    '/profile/edit',
+                    extra: profile,
+                  );
+                  if (result == true && context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Profile updated successfully'),
+                        backgroundColor: AppColors.green500,
+                      ),
+                    );
+                  }
+                },
                 child: Container(
                   padding: const EdgeInsets.all(8),
                   decoration: BoxDecoration(

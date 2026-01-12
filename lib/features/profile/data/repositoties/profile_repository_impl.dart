@@ -33,8 +33,114 @@ final class ProfileRepositoryImpl
   }
 
   @override
-  void updateProfile() {
-    // TODO: implement updateProfile
+  Future<Profile> getCurrentProfile() async {
+    final currentUser = _supabase.client.auth.currentUser;
+    if (currentUser == null) {
+      throw Exception('User not authenticated');
+    }
+    return await getProfile(currentUser.id);
+  }
+
+  @override
+  Future<void> updateProfile(Profile updatedProfile) async {
+    try {
+      // Update main profile fields
+      await _supabase.client
+          .from('profiles')
+          .update({
+            'display_name': updatedProfile.displayName,
+            'username': updatedProfile.username,
+            'phone': updatedProfile.phone.isEmpty ? null : updatedProfile.phone,
+            'gender': updatedProfile.gender,
+            'avatar_url': updatedProfile.avatarUrl,
+            'birthday': updatedProfile.birthday,
+          })
+          .eq('id', updatedProfile.id);
+
+      // Update hobbies
+      // Use upsert with onConflict to handle existing records
+
+      if (updatedProfile.hobbies.isNotEmpty) {
+        final hobbiesData = await _supabase.client
+            .from('hobbies')
+            .select('id, name')
+            .inFilter('name', updatedProfile.hobbies);
+
+        // Ensure unique hobby IDs
+        final hobbyIds = hobbiesData.map((h) => h['id']).toSet().toList();
+
+        if (hobbyIds.isNotEmpty) {
+          // First, delete hobbies that are no longer selected
+          final existingHobbies = await _supabase.client
+              .from('profiles_hobbies')
+              .select('hobby_id')
+              .eq('user_id', updatedProfile.id);
+
+          final existingHobbyIds = existingHobbies
+              .map((h) => h['hobby_id'])
+              .toSet();
+
+          final hobbyIdsToDelete = existingHobbyIds.difference(
+            hobbyIds.toSet(),
+          );
+
+          // Delete removed hobbies
+          if (hobbyIdsToDelete.isNotEmpty) {
+            await _supabase.client
+                .from('profiles_hobbies')
+                .delete()
+                .eq('user_id', updatedProfile.id)
+                .inFilter('hobby_id', hobbyIdsToDelete.toList());
+          }
+
+          // Upsert new/existing hobbies with onConflict
+          final associations = hobbyIds
+              .map(
+                (hobbyId) => {
+                  'user_id': updatedProfile.id,
+                  'hobby_id': hobbyId,
+                },
+              )
+              .toList();
+
+          await _supabase.client
+              .from('profiles_hobbies')
+              .upsert(associations, onConflict: 'user_id,hobby_id');
+        }
+      } else {
+        // If no hobbies selected, delete all associations
+        await _supabase.client
+            .from('profiles_hobbies')
+            .delete()
+            .eq('user_id', updatedProfile.id);
+      }
+
+      // Update local cache
+      profile = updatedProfile;
+    } catch (e) {
+      print('Error updating profile: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<bool> isUsernameAvailable(
+    String username,
+    String currentUserId,
+  ) async {
+    try {
+      final result = await _supabase.client
+          .from('profiles')
+          .select('id')
+          .eq('username', username)
+          .neq('id', currentUserId)
+          .maybeSingle();
+
+      return result == null; // Available if no result found
+    } catch (e) {
+      print('Error checking username availability: $e');
+      return false;
+    }
   }
 
   @override

@@ -37,3 +37,46 @@ final class ProfileNotifier extends AsyncNotifier<Profile> {
     return profile;
   }
 }
+
+// Profile edit controller
+final profileEditControllerProvider = Provider<ProfileEditController>((ref) {
+  return ProfileEditController(ref);
+});
+
+class ProfileEditController {
+  final Ref ref;
+  ProfileEditController(this.ref);
+
+  Future<void> updateProfile(Profile profile) async {
+    try {
+      await ref.read(profileRepositoryProvider).updateProfile(profile);
+      // Invalidate profile to refresh
+      ref.invalidate(profileProvider);
+    } catch (e) {
+      print('Error updating profile: $e');
+      rethrow;
+    }
+  }
+
+  Future<bool> isUsernameAvailable(
+    String username,
+    String currentUserId,
+  ) async {
+    return await ref
+        .read(profileRepositoryProvider)
+        .isUsernameAvailable(username, currentUserId);
+  }
+}
+
+// All hobbies provider (from database)
+final allHobbiesProvider = FutureProvider.autoDispose<List<String>>((
+  ref,
+) async {
+  final supabaseInstance = ref.watch(supabase);
+  final hobbiesData = await supabaseInstance.client
+      .from('hobbies')
+      .select('name')
+      .order('name');
+
+  return hobbiesData.map((h) => h['name'] as String).toList();
+});
