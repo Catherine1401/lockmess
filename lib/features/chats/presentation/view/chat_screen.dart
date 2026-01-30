@@ -6,6 +6,7 @@ import 'package:lockmess/core/constants/colors.dart';
 import 'package:lockmess/core/services/presence_service.dart';
 import 'package:lockmess/features/chats/presentation/viewmodel/chat_provider.dart';
 import 'package:lockmess/features/chats/presentation/widgets/chat_info_drawer.dart';
+import 'package:lockmess/features/chats/presentation/widgets/group_chat_info_drawer.dart';
 import 'package:lockmess/features/chats/presentation/widgets/message_bubble.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -225,7 +226,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     return IconButton(
                       icon: Icon(Icons.more_vert, color: AppColors.black900),
                       onPressed: conversation != null
-                          ? () => showChatInfoDrawer(context, conversation)
+                          ? () {
+                              if (conversation.isDirect) {
+                                showChatInfoDrawer(context, conversation);
+                              } else {
+                                showGroupChatInfoDrawer(context, conversation);
+                              }
+                            }
                           : null,
                     );
                   },
