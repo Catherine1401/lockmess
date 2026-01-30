@@ -311,88 +311,150 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
   }
 
   Widget _buildChannelsTab(String searchQuery) {
-    final myChannelsAsync = ref.watch(channelConversationsProvider);
+    // Use paginated provider for channels
+    final mapState = ref.watch(paginatedConversationsMapProvider);
+    final paginatedChannelsState =
+        mapState['channel'] ??
+        const PaginatedConversationsState(isLoading: true);
+
+    // Ensure initialized
+    if (mapState['channel'] == null) {
+      Future.microtask(
+        () => ref
+            .read(paginatedConversationsMapProvider.notifier)
+            .init('channel'),
+      );
+    }
+
+    final conversations = paginatedChannelsState.conversations;
     final recommendedAsync = ref.watch(recommendedChannelsProvider);
 
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // My Channels Section
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'My Channels',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.black900,
+    return NotificationListener<ScrollNotification>(
+      onNotification: (scrollInfo) {
+        if (scrollInfo.metrics.pixels >=
+            scrollInfo.metrics.maxScrollExtent - 200) {
+          ref
+              .read(paginatedConversationsMapProvider.notifier)
+              .loadMore('channel');
+        }
+        return false;
+      },
+      child: CustomScrollView(
+        key: PageStorageKey('channels_tab'),
+        slivers: [
+          // My Channels Header
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+              child: Text(
+                'My Channels',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.black900,
+                ),
               ),
             ),
           ),
-          myChannelsAsync.when(
-            data: (channels) {
-              if (channels.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    'You haven\'t joined any channels yet',
-                    style: TextStyle(color: AppColors.gray400),
-                  ),
-                );
-              }
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: NeverScrollableScrollPhysics(),
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                itemCount: channels.length,
-                itemBuilder: (context, index) =>
-                    _buildChannelTile(channels[index], isJoined: true),
-              );
-            },
-            loading: () => Center(child: CircularProgressIndicator()),
-            error: (_, __) => Text('Error loading channels'),
-          ),
 
-          SizedBox(height: 24),
+          // My Channels List
+          if (paginatedChannelsState.isLoading && conversations.isEmpty)
+            SliverToBoxAdapter(
+              child: Center(child: CircularProgressIndicator()),
+            )
+          else if (conversations.isEmpty)
+            SliverToBoxAdapter(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
+                child: Text(
+                  'You haven\'t joined any channels yet',
+                  style: TextStyle(color: AppColors.gray400),
+                ),
+              ),
+            )
+          else
+            SliverList(
+              delegate: SliverChildBuilderDelegate(
+                (context, index) {
+                  // Loading indicator at bottom of list
+                  if (index == conversations.length) {
+                    return Padding(
+                      padding: const EdgeInsets.all(16.0),
+                      child: Center(
+                        child: CircularProgressIndicator(strokeWidth: 2),
+                      ),
+                    );
+                  }
 
-          // Discover Section
-          Padding(
-            padding: const EdgeInsets.all(16),
-            child: Text(
-              'Discover Channels',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
-                color: AppColors.black900,
+                  // Filter locally if searching (though ideally backend should handle this for paginated)
+                  // For now, simpler to just show what we have
+                  final channel = conversations[index];
+                  if (searchQuery.isNotEmpty &&
+                      !channel.displayName.toLowerCase().contains(
+                        searchQuery.toLowerCase(),
+                      )) {
+                    return SizedBox.shrink(); // Hide unmatched, imperfect but simple
+                  }
+
+                  return _buildChannelTile(channel, isJoined: true);
+                },
+                childCount:
+                    conversations.length +
+                    (paginatedChannelsState.isLoading ? 1 : 0),
+              ),
+            ),
+
+          SliverToBoxAdapter(child: SizedBox(height: 24)),
+
+          // Discover Channels Header
+          SliverToBoxAdapter(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+              child: Text(
+                'Discover Channels',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.black900,
+                ),
               ),
             ),
           ),
+
+          // Discover List
           recommendedAsync.when(
             data: (channels) {
               if (channels.isEmpty) {
-                return Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Text(
-                    'No recommended channels based on your hobbies',
-                    style: TextStyle(color: AppColors.gray400),
+                return SliverToBoxAdapter(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'No recommended channels based on your hobbies',
+                      style: TextStyle(color: AppColors.gray400),
+                    ),
                   ),
                 );
               }
-              return ListView.builder(
-                shrinkWrap: true,
-                physics: NeverScrollableScrollPhysics(),
-                padding: EdgeInsets.symmetric(horizontal: 16),
-                itemCount: channels.length,
-                itemBuilder: (context, index) =>
-                    _buildChannelTile(channels[index], isJoined: false),
+              return SliverList(
+                delegate: SliverChildBuilderDelegate(
+                  (context, index) =>
+                      _buildChannelTile(channels[index], isJoined: false),
+                  childCount: channels.length,
+                ),
               );
             },
-            loading: () => Center(child: CircularProgressIndicator()),
-            error: (_, __) => Text('Error loading recommendations'),
+            loading: () => SliverToBoxAdapter(
+              child: Center(child: CircularProgressIndicator()),
+            ),
+            error: (_, __) => SliverToBoxAdapter(
+              child: Center(child: Text('Error loading recommendations')),
+            ),
           ),
 
-          SizedBox(height: 32),
+          SliverToBoxAdapter(child: SizedBox(height: 32)),
         ],
       ),
     );

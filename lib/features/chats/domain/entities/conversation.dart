@@ -12,6 +12,8 @@ class Conversation {
   final Profile? otherUser; // For direct chats
   final List<String>? memberIds; // For groups/channels
   final int? memberCount; // For groups/channels
+  final String? description;
+  final List<String>? recentMemberAvatars;
 
   const Conversation({
     required this.id,
@@ -25,6 +27,8 @@ class Conversation {
     this.otherUser,
     this.memberIds,
     this.memberCount,
+    this.description,
+    this.recentMemberAvatars,
   });
 
   String get displayName => type == 'direct'

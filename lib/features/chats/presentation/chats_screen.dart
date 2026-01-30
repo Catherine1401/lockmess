@@ -37,7 +37,8 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
     if (_scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 200) {
       print('📜 Triggering loadMore!');
-      ref.read(paginatedConversationsProvider.notifier).loadMore();
+      print('📜 Triggering loadMore!');
+      ref.read(paginatedConversationsMapProvider.notifier).loadMore('direct');
     }
   }
 
@@ -59,7 +60,19 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
   @override
   Widget build(BuildContext context) {
     // Use paginated provider for filtered direct chats
-    final paginatedState = ref.watch(paginatedConversationsProvider);
+    final mapState = ref.watch(paginatedConversationsMapProvider);
+    final paginatedState =
+        mapState['direct'] ??
+        const PaginatedConversationsState(isLoading: true);
+
+    // Ensure initialized
+    if (mapState['direct'] == null) {
+      Future.microtask(
+        () =>
+            ref.read(paginatedConversationsMapProvider.notifier).init('direct'),
+      );
+    }
+
     final conversations = paginatedState.conversations;
     final isLoadingInitial = paginatedState.isLoading && conversations.isEmpty;
 

@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lockmess/features/chats/data/repositories/conversation_repository_impl.dart';
 import 'package:lockmess/features/chats/data/repositories/message_repository_impl.dart';
 import 'package:lockmess/features/chats/domain/entities/conversation.dart';
 import 'package:lockmess/features/chats/domain/entities/message.dart';
+import 'package:riverpod/riverpod.dart';
 
 // Pagination State
 class PaginatedConversationsState {
@@ -37,86 +39,117 @@ class PaginatedConversationsState {
   }
 }
 
-// Paginated Direct Conversations Notifier
-class PaginatedDirectConversationsNotifier
-    extends Notifier<PaginatedConversationsState> {
+// Pagination Map Notifier
+class PaginatedConversationsMapNotifier
+    extends Notifier<Map<String, PaginatedConversationsState>> {
   static const int _pageSize = 20;
-  // TODO: Make this configurable if needed, currently hardcoded for Direct chats
-  static const String _type = 'direct';
 
   @override
-  PaginatedConversationsState build() {
-    // Trigger initial load
-    Future.microtask(() => loadInitial());
-    return const PaginatedConversationsState(isLoading: true);
+  Map<String, PaginatedConversationsState> build() {
+    return {};
   }
 
-  Future<void> loadInitial() async {
+  // Called by UI to ensure data is loaded
+  void init(String type) {
+    if (!state.containsKey(type)) {
+      Future.microtask(() => loadInitial(type));
+    }
+  }
+
+  Future<void> loadInitial(String type) async {
+    // Set loading state if not present or to update UI
+    state = {
+      ...state,
+      type: (state[type] ?? const PaginatedConversationsState()).copyWith(
+        isLoading: true,
+      ),
+    };
+
     try {
       final repo = ref.read(conversationRepositoryProvider);
       final conversations = await repo.getConversations(
         limit: _pageSize,
         offset: 0,
-        type: _type,
+        type: type,
       );
 
-      state = state.copyWith(
-        conversations: conversations,
-        isLoading: false,
-        hasMore: conversations.length >= _pageSize,
-        currentPage: 1,
-      );
+      state = {
+        ...state,
+        type: PaginatedConversationsState(
+          conversations: conversations,
+          isLoading: false,
+          hasMore: conversations.length >= _pageSize,
+          currentPage: 1,
+        ),
+      };
     } catch (e) {
-      state = state.copyWith(isLoading: false, error: e.toString());
+      state = {
+        ...state,
+        type: (state[type] ?? const PaginatedConversationsState()).copyWith(
+          isLoading: false,
+          error: e.toString(),
+        ),
+      };
     }
   }
 
-  Future<void> loadMore() async {
-    print(
-      '📦 [Pagination] loadMore called. isLoading: ${state.isLoading}, hasMore: ${state.hasMore}',
-    );
-    if (state.isLoading || !state.hasMore) return;
+  Future<void> loadMore(String type) async {
+    final currentState = state[type];
+    if (currentState == null) return;
 
-    state = state.copyWith(isLoading: true);
+    print(
+      '📦 [Pagination($type)] loadMore called. isLoading: ${currentState.isLoading}, hasMore: ${currentState.hasMore}',
+    );
+    if (currentState.isLoading || !currentState.hasMore) return;
+
+    state = {...state, type: currentState.copyWith(isLoading: true)};
 
     try {
       final repo = ref.read(conversationRepositoryProvider);
-      final offset = state.currentPage * _pageSize;
+      final offset = currentState.currentPage * _pageSize;
+      print('📦 [Pagination($type)] Fetching offset: $offset');
       final newConversations = await repo.getConversations(
         limit: _pageSize,
         offset: offset,
-        type: _type,
+        type: type,
       );
 
-      state = state.copyWith(
-        conversations: [...state.conversations, ...newConversations],
+      final nextState = currentState.copyWith(
+        conversations: [...currentState.conversations, ...newConversations],
         isLoading: false,
         hasMore: newConversations.length >= _pageSize,
-        currentPage: state.currentPage + 1,
+        currentPage: currentState.currentPage + 1,
       );
 
-      // print('📦 [Pagination] Loaded ${newConversations.length} more, total: ${state.conversations.length}');
+      state = {...state, type: nextState};
+
       print(
-        '📦 [Pagination] Loaded ${newConversations.length} more, total: ${state.conversations.length}',
+        '📦 [Pagination($type)] Loaded ${newConversations.length} more, total: ${nextState.conversations.length}',
       );
     } catch (e) {
-      print('🔴 [Pagination] Error: $e');
-      state = state.copyWith(isLoading: false, error: e.toString());
+      print('🔴 [Pagination($type)] Error: $e');
+      state = {
+        ...state,
+        type: currentState.copyWith(isLoading: false, error: e.toString()),
+      };
     }
   }
 
-  Future<void> refresh() async {
-    state = const PaginatedConversationsState(isLoading: true);
-    await loadInitial();
+  Future<void> refresh(String type) async {
+    state = {
+      ...state,
+      type: const PaginatedConversationsState(isLoading: true),
+    };
+    await loadInitial(type);
   }
 }
 
-// Provider for paginated direct conversations
-final paginatedConversationsProvider =
-    NotifierProvider<
-      PaginatedDirectConversationsNotifier,
-      PaginatedConversationsState
-    >(PaginatedDirectConversationsNotifier.new);
+// Provider for paginated conversations map
+final paginatedConversationsMapProvider =
+    NotifierProvider.autoDispose<
+      PaginatedConversationsMapNotifier,
+      Map<String, PaginatedConversationsState>
+    >(PaginatedConversationsMapNotifier.new);
 
 // Simple Conversations provider
 final conversationsProvider = FutureProvider.autoDispose<List<Conversation>>((
@@ -173,7 +206,11 @@ class ChatController {
       final conv = await ref
           .read(conversationRepositoryProvider)
           .getOrCreateDirectConversation(friendId);
+
+      // Refresh direct chats list
+      ref.read(paginatedConversationsMapProvider.notifier).refresh('direct');
       ref.invalidate(conversationsProvider);
+
       return conv;
     } catch (e) {
       print('Error creating conversation: $e');
@@ -286,8 +323,10 @@ class GroupController {
         '🟣 [GroupController] Channel created successfully: ${conversation.id}',
       );
 
+      // Refresh channels list
+      ref.read(paginatedConversationsMapProvider.notifier).refresh('channel');
+
       ref.invalidate(conversationsProvider);
-      ref.invalidate(conversationsStreamProvider);
       ref.invalidate(channelConversationsProvider);
       return conversation;
     } catch (e, stackTrace) {
@@ -303,10 +342,13 @@ class GroupController {
       await ref.read(conversationRepositoryProvider).joinChannel(channelId);
 
       print('🟣 [GroupController] Joined channel successfully');
-      ref.invalidate(conversationsStreamProvider);
+
+      // Refresh channels list
+      ref.read(paginatedConversationsMapProvider.notifier).refresh('channel');
+
+      // Keep legacy invalidation if other widgets use it (e.g. recommendations)
       ref.invalidate(recommendedChannelsProvider);
       ref.invalidate(channelConversationsProvider);
-      ref.invalidate(conversationsStreamProvider);
     } catch (e, stackTrace) {
       print('🔴 [GroupController] Error joining channel: $e');
       print('🔴 [GroupController] Stack trace: $stackTrace');

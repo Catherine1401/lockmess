@@ -203,7 +203,7 @@ final class ConversationRepositoryImpl
       // Get conversation details
       final response = await _supabase.client
           .from('conversations')
-          .select('id, type, name, avatar_url, updated_at')
+          .select('id, type, name, description, avatar_url, updated_at')
           .eq('id', conversationId)
           .maybeSingle();
 
@@ -226,9 +226,10 @@ final class ConversationRepositoryImpl
           .select('last_read_at')
           .eq('conversation_id', conversationId)
           .eq('user_id', _myId)
-          .single();
+          .maybeSingle();
 
-      final lastReadAt = participant['last_read_at'] != null
+      final lastReadAt =
+          participant != null && participant['last_read_at'] != null
           ? DateTime.parse(participant['last_read_at'])
           : null;
 
@@ -290,13 +291,31 @@ final class ConversationRepositoryImpl
       // For group/channel conversations
       final memberList = await _supabase.client
           .from('conversation_participants')
-          .select('user_id')
+          .select('user_id, profiles(avatar_url)')
           .eq('conversation_id', conversationId);
+
+      List<String> recentAvatars = [];
+      if (response['type'] == 'channel') {
+        // Get up to 3 recent member avatars for visual indication
+        final recentMembers = await _supabase.client
+            .from('conversation_participants')
+            .select('profiles(avatar_url)')
+            .eq('conversation_id', conversationId)
+            .order('joined_at', ascending: false)
+            .limit(3);
+
+        recentAvatars = (recentMembers as List)
+            .map((m) => m['profiles']?['avatar_url'] as String?)
+            .where((url) => url != null && url.isNotEmpty)
+            .cast<String>()
+            .toList();
+      }
 
       return Conversation(
         id: response['id'],
         type: response['type'],
         name: response['name'],
+        description: response['description'], // Add description
         avatarUrl: response['avatar_url'],
         lastMessageContent: lastMessageResponse?['content'],
         lastMessageTime: lastMessageResponse != null
@@ -306,6 +325,7 @@ final class ConversationRepositoryImpl
         updatedAt: DateTime.parse(response['updated_at']),
         memberIds: memberList.map((m) => m['user_id'] as String).toList(),
         memberCount: memberList.length,
+        recentMemberAvatars: recentAvatars, // Add avatars
       );
     } catch (e) {
       print('Error getting conversation by id: $e');
