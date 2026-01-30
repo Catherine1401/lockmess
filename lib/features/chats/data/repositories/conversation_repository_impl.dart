@@ -639,31 +639,71 @@ final class ConversationRepositoryImpl
   @override
   Future<List<Conversation>> getRecommendedChannels() async {
     try {
-      // Call the RPC function for recommended channels
-      final response = await _supabase.client.rpc(
-        'get_recommended_channels',
-        params: {'p_user_id': _myId},
-      );
+      // 1. Get user's hobbies
+      print('🔵 [Recommended] Fetching user hobbies for: $_myId');
+      final userHobbiesResponse = await _supabase.client
+          .from('profiles_hobbies')
+          .select('hobby_id')
+          .eq('user_id', _myId);
 
-      if (response == null || (response as List).isEmpty) {
-        return [];
+      final userHobbyIds = (userHobbiesResponse as List)
+          .map((e) => e['hobby_id'].toString())
+          .toSet();
+
+      print('🔵 [Recommended] User hobbies: $userHobbyIds');
+
+      if (userHobbyIds.isEmpty) {
+        return []; // No hobbies = no matches
       }
 
-      return (response as List).map((data) {
+      // 2. Get channels the user hasn't joined
+      final myChannelIds = await _supabase.client
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', _myId);
+
+      final joinedIds = (myChannelIds as List)
+          .map((c) => c['conversation_id'] as String)
+          .toSet();
+
+      // 3. Get all public channels with their hobbies
+      // Note: This is not optimal for large datasets but works for <1000 channels.
+      // Better approach would be filtering in SQL but requires complex join/subquery.
+      final channelsResponse = await _supabase.client
+          .from('conversations')
+          .select('*, conversation_hobbies(hobby_id)')
+          .eq('type', 'channel')
+          .order('updated_at', ascending: false);
+
+      final matchedChannels = (channelsResponse as List).where((channel) {
+        // Exclude joined
+        if (joinedIds.contains(channel['id'])) return false;
+
+        // Check hobby overlap
+        final channelHobbies = (channel['conversation_hobbies'] as List?)
+            ?.map((h) => h['hobby_id'].toString())
+            .toSet();
+
+        if (channelHobbies == null || channelHobbies.isEmpty) return false;
+
+        return channelHobbies.any((id) => userHobbyIds.contains(id));
+      }).toList();
+
+      return matchedChannels.map((data) {
         return Conversation(
-          id: data['conversation_id'],
+          id: data['id'],
           type: 'channel',
           name: data['name'],
           avatarUrl: data['avatar_url'],
           unreadCount: 0,
           updatedAt: DateTime.parse(data['updated_at']),
-          memberCount: data['member_count'] as int?,
+          // We could map member_count and description if available in view or query
+          description: data['description'],
         );
       }).toList();
     } catch (e) {
       print('Error getting recommended channels: $e');
-      // Fallback to getting all public channels if RPC fails
-      return getAllPublicChannels();
+      return [];
     }
   }
 
