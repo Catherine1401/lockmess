@@ -10,9 +10,12 @@ import 'package:lockmess/features/friends/presentation/view/search_friend_screen
 import 'package:lockmess/features/friends/presentation/view/user_profile_screen.dart';
 import 'package:lockmess/core/domain/entities/profile.dart';
 import 'package:lockmess/features/chats/presentation/chats_screen.dart';
+import 'package:lockmess/features/chats/presentation/groups_screen.dart';
 import 'package:lockmess/features/chats/presentation/view/chat_screen.dart';
+import 'package:lockmess/features/chats/presentation/view/create_group_screen.dart';
+import 'package:lockmess/features/chats/presentation/view/create_channel_screen.dart';
 import 'package:lockmess/features/profile/presentation/view/edit_profile_screen.dart';
-import 'package:lockmess/test.dart';
+import 'package:lockmess/features/chats/presentation/view/channel_profile_screen.dart';
 
 final _chatNavigatorKey = GlobalKey<NavigatorState>();
 final _groupNavigatorKey = GlobalKey<NavigatorState>();
@@ -49,6 +52,21 @@ final routerProvider = Provider<GoRouter>((ref) {
         },
       ),
       GoRoute(
+        path: '/create-group',
+        builder: (_, __) => const CreateGroupScreen(),
+      ),
+      GoRoute(
+        path: '/create-channel',
+        builder: (_, __) => const CreateChannelScreen(),
+      ),
+      GoRoute(
+        path: '/channel/:channelId',
+        builder: (_, state) {
+          final channelId = state.pathParameters['channelId']!;
+          return ChannelProfileScreen(channelId: channelId);
+        },
+      ),
+      GoRoute(
         path: '/profile/edit',
         builder: (_, state) {
           final profile = state.extra as Profile;
@@ -69,7 +87,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           StatefulShellBranch(
             navigatorKey: _groupNavigatorKey,
             routes: <RouteBase>[
-              GoRoute(path: '/group', builder: (_, _) => Text('group')),
+              GoRoute(path: '/group', builder: (_, _) => const GroupsScreen()),
             ],
           ),
 

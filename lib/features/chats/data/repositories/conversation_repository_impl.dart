@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lockmess/core/domain/entities/profile.dart';
 import 'package:lockmess/core/network/supabase.dart';
@@ -20,231 +21,109 @@ final class ConversationRepositoryImpl
   String get _myId => _supabase.client.auth.currentUser!.id;
 
   @override
-  Stream<List<Conversation>> streamConversations() async* {
-    try {
-      print('Starting conversation stream...');
+  Stream<List<Conversation>> streamConversations() {
+    print('Starting conversation stream...');
+    // Create a controller to manage the stream manually
+    final controller = StreamController<List<Conversation>>();
 
-      // Stream conversation_participants realtime
-      await for (final participantsData
-          in _supabase.client
-              .from('conversation_participants')
-              .stream(primaryKey: ['id'])
-              .eq('user_id', _myId)
-              .limit(20)) {
-        print('Received ${participantsData.length} participants');
-        final conversations = <Conversation>[];
+    // 1. Fetch initial data immediately using the optimized View
+    getConversations()
+        .then((data) {
+          if (!controller.isClosed) controller.add(data);
+        })
+        .catchError((e) {
+          if (!controller.isClosed) controller.addError(e);
+        });
 
-        // Process conversations progressively
-        for (final item in participantsData) {
-          try {
-            // Get conversation details
-            final convResponse = await _supabase.client
-                .from('conversations')
-                .select('id, type, name, avatar_url, updated_at')
-                .eq('id', item['conversation_id'])
-                .maybeSingle();
+    // 2. Setup Realtime subscription for relevant tables
+    // We listen to 'conversations' (for reorder/updates) and 'conversation_participants' (for joins/leaves)
+    // Note: listening to 'messages' is also an option but 'conversations' update trigger covers it (if trigger is installed)
+    final channel = _supabase.client.channel('public:conversations_updates');
 
-            if (convResponse == null) continue;
+    channel
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'conversations',
+          callback: (payload) async {
+            print('Conversation update detected: ${payload.eventType}');
+            // Refresh the list efficiently
+            final data = await getConversations();
+            if (!controller.isClosed) controller.add(data);
+          },
+        )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.all,
+          schema: 'public',
+          table: 'conversation_participants',
+          filter: PostgresChangeFilter(
+            type: PostgresChangeFilterType.eq,
+            column: 'user_id',
+            value: _myId,
+          ),
+          callback: (payload) async {
+            print('Participant update detected: ${payload.eventType}');
+            final data = await getConversations();
+            if (!controller.isClosed) controller.add(data);
+          },
+        )
+        .subscribe();
 
-            final conv = convResponse;
-            final conversationId = conv['id'];
+    // Clean up on cancel
+    controller.onCancel = () {
+      print('Canceling conversation stream');
+      _supabase.client.removeChannel(channel);
+      controller.close();
+    };
 
-            // Get last message (async but quick)
-            final lastMessageData = await _supabase.client
-                .from('messages')
-                .select('content, created_at')
-                .eq('conversation_id', conversationId)
-                .isFilter('deleted_at', null)
-                .order('created_at', ascending: false)
-                .limit(1)
-                .maybeSingle();
-
-            // Calculate unread count
-            final lastReadAt = item['last_read_at'];
-            final unreadResponse = await _supabase.client
-                .from('messages')
-                .select('id')
-                .eq('conversation_id', conversationId)
-                .neq('sender_id', _myId)
-                .isFilter('deleted_at', null)
-                .gt('created_at', lastReadAt ?? '1970-01-01');
-
-            final unreadCount = (unreadResponse as List).length;
-
-            Profile? otherUser;
-
-            // For direct chats, get other user
-            if (conv['type'] == 'direct') {
-              final participants = await _supabase.client
-                  .from('conversation_participants')
-                  .select('user_id, profiles!inner(*, hobbies(name))')
-                  .eq('conversation_id', conversationId)
-                  .neq('user_id', _myId)
-                  .maybeSingle();
-
-              if (participants != null) {
-                final profileData = participants['profiles'];
-                final user = parseUser(profileData);
-                final hobbies =
-                    (profileData['hobbies'] != null &&
-                        profileData['hobbies'] is List &&
-                        (profileData['hobbies'] as List).isNotEmpty)
-                    ? getHobbies([profileData])
-                    : <String>[];
-
-                otherUser = Profile(
-                  id: user.id,
-                  displayName: user.displayName,
-                  username: user.username,
-                  phone: user.phone,
-                  gender: user.gender,
-                  email: user.email,
-                  avatarUrl: user.avatarUrl,
-                  birthday: user.birthday,
-                  hobbies: hobbies,
-                );
-              }
-            }
-
-            conversations.add(
-              Conversation(
-                id: conversationId,
-                type: conv['type'],
-                name: conv['name'],
-                avatarUrl: conv['avatar_url'],
-                lastMessageContent: lastMessageData?['content'],
-                lastMessageTime: lastMessageData != null
-                    ? DateTime.parse(lastMessageData['created_at'])
-                    : null,
-                unreadCount: unreadCount,
-                updatedAt: DateTime.parse(conv['updated_at']),
-                otherUser: otherUser,
-              ),
-            );
-          } catch (e) {
-            print('Error processing conversation: $e');
-            continue;
-          }
-        }
-
-        // Sort by updated_at descending
-        conversations.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
-
-        print('Yielding ${conversations.length} conversations');
-        // Emit current list (progressive + realtime)
-        yield conversations;
-      }
-    } catch (e) {
-      print('Error streaming conversations: $e');
-      yield [];
-    }
+    return controller.stream;
   }
 
+  @override
   @override
   Future<List<Conversation>> getConversations({
     int limit = 20,
     int offset = 0,
   }) async {
     try {
-      // Get conversations where user is a participant
       final response = await _supabase.client
-          .from('conversation_participants')
-          .select('''
-            conversation_id,
-            last_read_at,
-            conversations!inner(
-              id,
-              type,
-              name,
-              avatar_url,
-              updated_at
-            )
-          ''')
-          .eq('user_id', _myId)
-          .order('conversations(updated_at)', ascending: false)
+          .from('user_conversations_view')
+          .select()
+          .eq('owner_id', _myId)
+          .order('last_message_time', ascending: false)
           .range(offset, offset + limit - 1);
 
-      final conversations = <Conversation>[];
-
-      for (final item in response) {
-        final conv = item['conversations'];
-        final conversationId = conv['id'];
-
-        // Get last message
-        final lastMessageData = await _supabase.client
-            .from('messages')
-            .select('content, created_at')
-            .eq('conversation_id', conversationId)
-            .isFilter('deleted_at', null)
-            .order('created_at', ascending: false)
-            .limit(1)
-            .maybeSingle();
-
-        // Get unread count
-        final lastReadAt = item['last_read_at'];
-        final unreadResponse = await _supabase.client
-            .from('messages')
-            .select('id')
-            .eq('conversation_id', conversationId)
-            .neq('sender_id', _myId)
-            .isFilter('deleted_at', null)
-            .gt('created_at', lastReadAt ?? '1970-01-01');
-
-        final unreadCount = (unreadResponse as List).length;
-
+      return (response as List).map((data) {
         Profile? otherUser;
-
-        // For direct chats, get the other user's profile
-        if (conv['type'] == 'direct') {
-          final participants = await _supabase.client
-              .from('conversation_participants')
-              .select('user_id, profiles!inner(*, hobbies(name))')
-              .eq('conversation_id', conversationId)
-              .neq('user_id', _myId)
-              .maybeSingle();
-
-          if (participants != null) {
-            final profileData = participants['profiles'];
-            final user = parseUser(profileData);
-            final hobbies =
-                (profileData['hobbies'] != null &&
-                    profileData['hobbies'] is List &&
-                    (profileData['hobbies'] as List).isNotEmpty)
-                ? getHobbies([profileData])
-                : <String>[];
-
-            otherUser = Profile(
-              id: user.id,
-              displayName: user.displayName,
-              username: user.username,
-              phone: user.phone,
-              gender: user.gender,
-              email: user.email,
-              avatarUrl: user.avatarUrl,
-              birthday: user.birthday,
-              hobbies: hobbies,
-            );
-          }
+        if (data['other_user_profile'] != null) {
+          final profileData = data['other_user_profile'];
+          otherUser = Profile(
+            id: profileData['id'] ?? '',
+            displayName: profileData['display_name'] ?? '',
+            username: profileData['username'] ?? '',
+            phone: profileData['phone'] ?? '',
+            gender: profileData['gender'] ?? '',
+            email: profileData['email'] ?? '',
+            avatarUrl: profileData['avatar_url'] ?? '',
+            birthday: profileData['birthday'] ?? '',
+            hobbies: [], // Hobbies not included in list view for performance
+          );
         }
 
-        conversations.add(
-          Conversation(
-            id: conversationId,
-            type: conv['type'],
-            name: conv['name'],
-            avatarUrl: conv['avatar_url'],
-            lastMessageContent: lastMessageData?['content'],
-            lastMessageTime: lastMessageData != null
-                ? DateTime.parse(lastMessageData['created_at'])
-                : null,
-            unreadCount: unreadCount,
-            updatedAt: DateTime.parse(conv['updated_at']),
-            otherUser: otherUser,
-          ),
+        return Conversation(
+          id: data['conversation_id'],
+          type: data['type'],
+          name: data['name'],
+          avatarUrl: data['avatar_url'],
+          lastMessageContent: data['last_message_content'],
+          lastMessageTime: data['last_message_time'] != null
+              ? DateTime.parse(data['last_message_time'])
+              : null,
+          unreadCount: data['unread_count'] as int,
+          updatedAt: DateTime.parse(data['updated_at']),
+          otherUser: otherUser,
         );
-      }
-
-      return conversations;
+      }).toList();
     } catch (e) {
       print('Error getting conversations: $e');
       return [];
@@ -252,64 +131,168 @@ final class ConversationRepositoryImpl
   }
 
   @override
-  Future<Conversation?> getConversationById(String conversationId) async {
+  Future<List<Conversation>> getConversationsByType(String type) async {
     try {
-      // Fetch conversation details
-      final convData = await _supabase.client
+      final response = await _supabase.client
+          .from('user_conversations_view')
+          .select()
+          .eq('owner_id', _myId)
+          .eq('type', type)
+          .order('last_message_time', ascending: false);
+
+      return (response as List).map((data) {
+        // ... (Similar mapping logic, simplified for brevity since it's identical mapping)
+        // Actually, better to extract mapping or duplicate it safely.
+
+        Profile? otherUser;
+        if (data['other_user_profile'] != null) {
+          final profileData = data['other_user_profile'];
+          otherUser = Profile(
+            id: profileData['id'] ?? '',
+            displayName: profileData['display_name'] ?? '',
+            username: profileData['username'] ?? '',
+            phone: profileData['phone'] ?? '',
+            gender: profileData['gender'] ?? '',
+            email: profileData['email'] ?? '',
+            avatarUrl: profileData['avatar_url'] ?? '',
+            birthday: profileData['birthday'] ?? '',
+            hobbies: [],
+          );
+        }
+
+        return Conversation(
+          id: data['conversation_id'],
+          type: data['type'],
+          name: data['name'],
+          avatarUrl: data['avatar_url'],
+          lastMessageContent: data['last_message_content'],
+          lastMessageTime: data['last_message_time'] != null
+              ? DateTime.parse(data['last_message_time'])
+              : null,
+          unreadCount: data['unread_count'] as int,
+          updatedAt: DateTime.parse(data['updated_at']),
+          otherUser: otherUser,
+        );
+      }).toList();
+    } catch (e) {
+      print('Error getting conversations by type: $e');
+      return [];
+    }
+  }
+
+  @override
+  Future<Conversation> getConversationById(String conversationId) async {
+    try {
+      // Get conversation details
+      final response = await _supabase.client
           .from('conversations')
           .select('id, type, name, avatar_url, updated_at')
           .eq('id', conversationId)
           .maybeSingle();
 
-      if (convData == null) return null;
+      if (response == null) {
+        throw Exception('Conversation not found');
+      }
 
-      Profile? otherUser;
+      // Get last message
+      final lastMessageResponse = await _supabase.client
+          .from('messages')
+          .select('content, created_at')
+          .eq('conversation_id', conversationId)
+          .order('created_at', ascending: false)
+          .limit(1)
+          .maybeSingle();
 
-      // For direct chats, get other user's profile
-      if (convData['type'] == 'direct') {
+      // Get unread count
+      final participant = await _supabase.client
+          .from('conversation_participants')
+          .select('last_read_at')
+          .eq('conversation_id', conversationId)
+          .eq('user_id', _myId)
+          .single();
+
+      final lastReadAt = participant['last_read_at'] != null
+          ? DateTime.parse(participant['last_read_at'])
+          : null;
+
+      int unreadCount = 0;
+      if (lastReadAt != null) {
+        final unreadMessages = await _supabase.client
+            .from('messages')
+            .select('id')
+            .eq('conversation_id', conversationId)
+            .gt('created_at', lastReadAt.toIso8601String())
+            .neq('sender_id', _myId);
+        unreadCount = unreadMessages.length;
+      }
+
+      // Handle different conversation types
+      if (response['type'] == 'direct') {
+        // Get other user's profile
         final participants = await _supabase.client
             .from('conversation_participants')
             .select('user_id, profiles!inner(*, hobbies(name))')
             .eq('conversation_id', conversationId)
-            .neq('user_id', _myId)
-            .maybeSingle();
+            .neq('user_id', _myId);
 
-        if (participants != null) {
-          final profileData = participants['profiles'];
-          final user = parseUser(profileData);
-          final hobbies =
-              (profileData['hobbies'] != null &&
-                  profileData['hobbies'] is List &&
-                  (profileData['hobbies'] as List).isNotEmpty)
-              ? getHobbies([profileData])
-              : <String>[];
-
-          otherUser = Profile(
-            id: user.id,
-            displayName: user.displayName,
-            username: user.username,
-            phone: user.phone,
-            gender: user.gender,
-            email: user.email,
-            avatarUrl: user.avatarUrl,
-            birthday: user.birthday,
-            hobbies: hobbies,
-          );
+        if (participants.isEmpty) {
+          throw Exception('No other participant found');
         }
+
+        final otherUserData = participants.first['profiles'];
+        final hobbies = getHobbies([otherUserData]);
+        final parsedUser = parseUser(otherUserData);
+
+        final otherUser = Profile(
+          id: parsedUser.id,
+          displayName: parsedUser.displayName,
+          username: parsedUser.username,
+          phone: parsedUser.phone,
+          gender: parsedUser.gender,
+          email: parsedUser.email,
+          avatarUrl: parsedUser.avatarUrl,
+          birthday: parsedUser.birthday,
+          hobbies: hobbies,
+        );
+
+        return Conversation(
+          id: response['id'],
+          type: response['type'],
+          name: response['name'],
+          avatarUrl: response['avatar_url'],
+          lastMessageContent: lastMessageResponse?['content'],
+          lastMessageTime: lastMessageResponse != null
+              ? DateTime.parse(lastMessageResponse['created_at'])
+              : null,
+          unreadCount: unreadCount,
+          updatedAt: DateTime.parse(response['updated_at']),
+          otherUser: otherUser,
+        );
       }
 
+      // For group/channel conversations
+      final memberList = await _supabase.client
+          .from('conversation_participants')
+          .select('user_id')
+          .eq('conversation_id', conversationId);
+
       return Conversation(
-        id: convData['id'],
-        type: convData['type'],
-        name: convData['name'],
-        avatarUrl: convData['avatar_url'],
-        unreadCount: 0,
-        updatedAt: DateTime.parse(convData['updated_at']),
-        otherUser: otherUser,
+        id: response['id'],
+        type: response['type'],
+        name: response['name'],
+        avatarUrl: response['avatar_url'],
+        lastMessageContent: lastMessageResponse?['content'],
+        lastMessageTime: lastMessageResponse != null
+            ? DateTime.parse(lastMessageResponse['created_at'])
+            : null,
+        unreadCount: unreadCount,
+        updatedAt: DateTime.parse(response['updated_at']),
+        memberIds: memberList.map((m) => m['user_id'] as String).toList(),
+        memberCount: memberList.length,
       );
     } catch (e) {
-      print('Error getting conversation by ID: $e');
-      return null;
+      print('Error getting conversation by id: $e');
+      rethrow;
     }
   }
 
@@ -318,39 +301,67 @@ final class ConversationRepositoryImpl
     try {
       print('Getting or creating conversation with friend: $friendId');
 
-      // Check if conversation already exists by checking participants
-      final existingParticipants = await _supabase.client
+      // OPTIMIZED: Find existing direct conversation efficiently
+      // Step 1: Get all direct conversation IDs where current user is a participant
+      final myDirectConvs = await _supabase.client
           .from('conversation_participants')
           .select('conversation_id, conversations!inner(id, type)')
-          .eq('user_id', _myId);
+          .eq('user_id', _myId)
+          .eq('conversations.type', 'direct');
 
-      print(
-        'Found ${existingParticipants.length} existing participants for current user',
-      );
+      if (myDirectConvs.isNotEmpty) {
+        // Step 2: Get the list of conversation IDs
+        final convIds = myDirectConvs.map((c) => c['conversation_id']).toList();
 
-      // Look for a direct conversation where both users are participants
-      for (final participant in existingParticipants) {
-        final convId = participant['conversation_id'];
-        final conv = participant['conversations'];
-
-        if (conv['type'] != 'direct') continue;
-
-        // Check if friend is also a participant
-        final friendParticipant = await _supabase.client
+        // Step 3: Check if friend is in any of these conversations (single query)
+        final friendInConv = await _supabase.client
             .from('conversation_participants')
-            .select('id')
-            .eq('conversation_id', convId)
+            .select('conversation_id')
             .eq('user_id', friendId)
+            .inFilter('conversation_id', convIds)
+            .limit(1)
             .maybeSingle();
 
-        if (friendParticipant != null) {
-          print('Found existing conversation: $convId');
-          // Fetch full conversation details
-          final existing = await getConversationById(convId);
-          if (existing == null) {
-            throw Exception('Conversation not found');
-          }
-          return existing;
+        if (friendInConv != null) {
+          final convId = friendInConv['conversation_id'];
+          print('Found existing conversation (optimized): $convId');
+
+          // Get conversation details
+          final convData = await _supabase.client
+              .from('conversations')
+              .select('*')
+              .eq('id', convId)
+              .single();
+
+          // Fetch friend profile for display
+          final profileData = await _supabase.client
+              .from('profiles')
+              .select('*')
+              .eq('id', friendId)
+              .single();
+
+          final user = parseUser(profileData);
+          final otherUser = Profile(
+            id: user.id,
+            displayName: user.displayName,
+            username: user.username,
+            phone: user.phone,
+            gender: user.gender,
+            email: user.email,
+            avatarUrl: user.avatarUrl,
+            birthday: user.birthday,
+            hobbies: [],
+          );
+
+          return Conversation(
+            id: convId,
+            type: 'direct',
+            name: convData['name'],
+            avatarUrl: convData['avatar_url'],
+            unreadCount: 0,
+            updatedAt: DateTime.parse(convData['updated_at']),
+            otherUser: otherUser,
+          );
         }
       }
 
@@ -376,18 +387,11 @@ final class ConversationRepositoryImpl
       // Fetch friend profile
       final profileData = await _supabase.client
           .from('profiles')
-          .select('*, hobbies(name)')
+          .select('*')
           .eq('id', friendId)
           .single();
 
       final user = parseUser(profileData);
-      final hobbies =
-          (profileData['hobbies'] != null &&
-              profileData['hobbies'] is List &&
-              (profileData['hobbies'] as List).isNotEmpty)
-          ? getHobbies([profileData])
-          : <String>[];
-
       final otherUser = Profile(
         id: user.id,
         displayName: user.displayName,
@@ -397,7 +401,7 @@ final class ConversationRepositoryImpl
         email: user.email,
         avatarUrl: user.avatarUrl,
         birthday: user.birthday,
-        hobbies: hobbies,
+        hobbies: [],
       );
 
       final result = Conversation(
@@ -428,6 +432,287 @@ final class ConversationRepositoryImpl
           .match({'conversation_id': conversationId, 'user_id': _myId});
     } catch (e) {
       print('Error marking as read: $e');
+    }
+  }
+
+  @override
+  Future<Conversation> createGroupConversation({
+    required String name,
+    required List<String> memberIds,
+  }) async {
+    try {
+      print('🟢 [Repository] Starting group creation');
+      print('🟢 [Repository] Current user: $_myId');
+
+      // Include current user in members
+      final allMemberIds = {...memberIds, _myId}.toList();
+      print('🟢 [Repository] Total members: ${allMemberIds.length}');
+      print('🟢 [Repository] Member IDs: $allMemberIds');
+
+      // Create conversation
+      print('🟢 [Repository] Creating conversation record...');
+      final convResponse = await _supabase.client
+          .from('conversations')
+          .insert({'type': 'group', 'name': name, 'created_by': _myId})
+          .select()
+          .single();
+
+      final conversationId = convResponse['id'];
+      print('🟢 [Repository] Conversation created: $conversationId');
+
+      // Add all members (creator is admin, others are members)
+      final participants = allMemberIds.map((userId) {
+        return {
+          'conversation_id': conversationId,
+          'user_id': userId,
+          'role': userId == _myId ? 'admin' : 'member',
+        };
+      }).toList();
+
+      print('🟢 [Repository] Adding ${participants.length} participants...');
+      await _supabase.client
+          .from('conversation_participants')
+          .insert(participants);
+
+      print('🟢 [Repository] Group creation completed successfully');
+
+      return Conversation(
+        id: conversationId,
+        type: 'group',
+        name: name,
+        avatarUrl: convResponse['avatar_url'],
+        unreadCount: 0,
+        updatedAt: DateTime.parse(convResponse['updated_at']),
+        memberCount: allMemberIds.length,
+        memberIds: allMemberIds,
+      );
+    } catch (e, stackTrace) {
+      print('🔴 [Repository] Error creating group: $e');
+      print('🔴 [Repository] Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getAvailableHobbies() async {
+    try {
+      final data = await _supabase.client
+          .from('hobbies')
+          .select('id, name')
+          .order('name');
+      return List<Map<String, dynamic>>.from(data);
+    } catch (e) {
+      print('Error fetching hobbies: $e');
+      return [];
+    }
+  }
+
+  @override
+  Future<Conversation> createChannel({
+    required String name,
+    String? description,
+    List<String> hobbyIds = const [],
+  }) async {
+    try {
+      // Only creator is admin
+      final allAdminIds = [_myId];
+
+      // Create conversation
+      final convResponse = await _supabase.client
+          .from('conversations')
+          .insert({
+            'type': 'channel',
+            'name': name,
+            'description': description,
+            'created_by': _myId,
+          })
+          .select()
+          .single();
+
+      final conversationId = convResponse['id'];
+
+      // Add creator as admin
+      await _supabase.client.from('conversation_participants').insert({
+        'conversation_id': conversationId,
+        'user_id': _myId,
+        'role': 'admin',
+      });
+
+      // Add hobbies if selected
+      if (hobbyIds.isNotEmpty) {
+        final hobbiesData = hobbyIds
+            .map(
+              (hobbyId) => {
+                'conversation_id': conversationId,
+                'hobby_id': hobbyId,
+              },
+            )
+            .toList();
+
+        await _supabase.client.from('conversation_hobbies').insert(hobbiesData);
+      }
+
+      return Conversation(
+        id: conversationId,
+        type: 'channel',
+        name: name,
+        avatarUrl: convResponse['avatar_url'],
+        unreadCount: 0,
+        updatedAt: DateTime.parse(convResponse['updated_at']),
+        memberCount: 1,
+        memberIds: allAdminIds,
+      );
+    } catch (e) {
+      print('Error creating channel: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> addMember(
+    String conversationId,
+    String userId, {
+    String role = 'member',
+  }) async {
+    try {
+      await _supabase.client.from('conversation_participants').insert({
+        'conversation_id': conversationId,
+        'user_id': userId,
+        'role': role,
+      });
+    } catch (e) {
+      print('Error adding member: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<void> removeMember(String conversationId, String userId) async {
+    try {
+      await _supabase.client.from('conversation_participants').delete().match({
+        'conversation_id': conversationId,
+        'user_id': userId,
+      });
+    } catch (e) {
+      print('Error removing member: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<Conversation>> getRecommendedChannels() async {
+    try {
+      // Call the RPC function for recommended channels
+      final response = await _supabase.client.rpc(
+        'get_recommended_channels',
+        params: {'p_user_id': _myId},
+      );
+
+      if (response == null || (response as List).isEmpty) {
+        return [];
+      }
+
+      return (response as List).map((data) {
+        return Conversation(
+          id: data['conversation_id'],
+          type: 'channel',
+          name: data['name'],
+          avatarUrl: data['avatar_url'],
+          unreadCount: 0,
+          updatedAt: DateTime.parse(data['updated_at']),
+          memberCount: data['member_count'] as int?,
+        );
+      }).toList();
+    } catch (e) {
+      print('Error getting recommended channels: $e');
+      // Fallback to getting all public channels if RPC fails
+      return getAllPublicChannels();
+    }
+  }
+
+  @override
+  Future<List<Conversation>> getAllPublicChannels() async {
+    try {
+      // Get all channels the user hasn't joined
+      final myChannelIds = await _supabase.client
+          .from('conversation_participants')
+          .select('conversation_id')
+          .eq('user_id', _myId);
+
+      final joinedIds = (myChannelIds as List)
+          .map((c) => c['conversation_id'] as String)
+          .toList();
+
+      var query = _supabase.client
+          .from('conversations')
+          .select('*')
+          .eq('type', 'channel');
+
+      if (joinedIds.isNotEmpty) {
+        // Use a negative filter approach
+        final allChannels = await query.order('updated_at', ascending: false);
+
+        return (allChannels as List)
+            .where((c) => !joinedIds.contains(c['id']))
+            .map((data) {
+              return Conversation(
+                id: data['id'],
+                type: 'channel',
+                name: data['name'],
+                avatarUrl: data['avatar_url'],
+                unreadCount: 0,
+                updatedAt: DateTime.parse(data['updated_at']),
+              );
+            })
+            .toList();
+      }
+
+      final channels = await query.order('updated_at', ascending: false);
+
+      return (channels as List).map((data) {
+        return Conversation(
+          id: data['id'],
+          type: 'channel',
+          name: data['name'],
+          avatarUrl: data['avatar_url'],
+          unreadCount: 0,
+          updatedAt: DateTime.parse(data['updated_at']),
+        );
+      }).toList();
+    } catch (e) {
+      print('Error getting all public channels: $e');
+      return [];
+    }
+  }
+
+  @override
+  Future<void> joinChannel(String channelId) async {
+    try {
+      await _supabase.client.from('conversation_participants').insert({
+        'conversation_id': channelId,
+        'user_id': _myId,
+        'role': 'member',
+      });
+    } catch (e) {
+      print('Error joining channel: $e');
+      rethrow;
+    }
+  }
+
+  @override
+  Future<List<String>> getChannelHobbies(String channelId) async {
+    try {
+      final response = await _supabase.client
+          .from('conversation_hobbies')
+          .select('hobbies!inner(name)')
+          .eq('conversation_id', channelId);
+
+      return (response as List)
+          .map((h) => h['hobbies']['name'] as String)
+          .toList();
+    } catch (e) {
+      print('Error getting channel hobbies: $e');
+      return [];
     }
   }
 }

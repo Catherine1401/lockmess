@@ -27,6 +27,7 @@ class ChatsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    // Only show direct conversations
     final conversationsAsync = ref.watch(conversationsProvider);
 
     return Scaffold(
@@ -61,11 +62,16 @@ class ChatsScreen extends ConsumerWidget {
               ),
             ),
 
-            // Conversations list
+            // Conversations list (direct only)
             Expanded(
               child: conversationsAsync.when(
                 data: (conversations) {
-                  if (conversations.isEmpty) {
+                  // Filter only direct conversations
+                  final directConvs = conversations
+                      .where((c) => c.isDirect)
+                      .toList();
+
+                  if (directConvs.isEmpty) {
                     return Center(
                       child: Text(
                         'No conversations yet',
@@ -78,14 +84,14 @@ class ChatsScreen extends ConsumerWidget {
 
                   return ListView.separated(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: conversations.length,
+                    itemCount: directConvs.length,
                     separatorBuilder: (_, __) => Divider(
                       height: 1,
                       color: AppColors.gray100,
                       indent: 76,
                     ),
                     itemBuilder: (context, index) {
-                      final conv = conversations[index];
+                      final conv = directConvs[index];
                       return ListTile(
                         contentPadding: const EdgeInsets.symmetric(
                           vertical: 12,
@@ -99,54 +105,65 @@ class ChatsScreen extends ConsumerWidget {
                                 : 'https://github.com/shadcn.png',
                           ),
                         ),
-                        title: Row(
+                        title: Text(
+                          conv.displayName,
+                          style: TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 16,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        subtitle: Text(
+                          conv.lastMessageContent ?? 'No messages yet',
+                          style: TextStyle(
+                            color: AppColors.gray400,
+                            fontSize: 14,
+                          ),
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            Expanded(
-                              child: Text(
-                                conv.displayName,
-                                style: TextStyle(
-                                  fontSize: 16,
-                                  fontWeight: FontWeight.w600,
-                                  color: AppColors.black900,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              ),
-                            ),
                             Text(
                               _formatTimestamp(conv.lastMessageTime),
                               style: TextStyle(
-                                fontSize: 12,
                                 color: AppColors.gray400,
+                                fontSize: 12,
                               ),
                             ),
+                            if (conv.unreadCount > 0) ...[
+                              SizedBox(height: 4),
+                              Container(
+                                padding: EdgeInsets.all(6),
+                                decoration: BoxDecoration(
+                                  color: AppColors.green500,
+                                  shape: BoxShape.circle,
+                                ),
+                                child: Text(
+                                  conv.unreadCount > 99
+                                      ? '99+'
+                                      : '${conv.unreadCount}',
+                                  style: TextStyle(
+                                    color: AppColors.white900,
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                ),
+                              ),
+                            ],
                           ],
                         ),
-                        subtitle: conv.lastMessageContent != null
-                            ? Text(
-                                conv.lastMessageContent!,
-                                style: TextStyle(
-                                  fontSize: 14,
-                                  color: AppColors.gray400,
-                                ),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                              )
-                            : null,
-                        onTap: () {
-                          context.push('/chat/${conv.id}');
-                        },
+                        onTap: () => context.push('/chat/${conv.id}'),
                       );
                     },
                   );
                 },
                 loading: () => Center(child: CircularProgressIndicator()),
-                error: (e, st) => Center(
-                  child: Text(
-                    'Error loading conversations',
-                    style: TextStyle(color: Colors.red),
-                  ),
-                ),
+                error: (error, _) =>
+                    Center(child: Text('Error loading conversations')),
               ),
             ),
           ],

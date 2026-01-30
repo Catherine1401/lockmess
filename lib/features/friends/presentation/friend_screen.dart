@@ -10,11 +10,19 @@ import 'package:lockmess/features/friends/presentation/viewmodel/friend_provider
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:sliver_tools/sliver_tools.dart';
 
-class FriendScreen extends ConsumerWidget {
+class FriendScreen extends ConsumerStatefulWidget {
   const FriendScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<FriendScreen> createState() => _FriendScreenState();
+}
+
+class _FriendScreenState extends ConsumerState<FriendScreen> {
+  bool _isExpanded = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final ref = this.ref;
     final friendsAsync = ref.watch(friendsListProvider);
     final requestsAsync = ref.watch(friendRequestsProvider);
 
@@ -94,17 +102,33 @@ class FriendScreen extends ConsumerWidget {
                   );
                 }
                 return SliverList(
-                  delegate: SliverChildBuilderDelegate((context, index) {
-                    if (index >= 3 && friends.length > 3) {
-                      // Show only first 3, then "See more" button
-                      return index == 3
-                          ? _buildSeeMoreButton(context)
-                          : SizedBox.shrink();
-                    }
-                    if (index >= friends.length) return SizedBox.shrink();
-                    final friend = friends[index];
-                    return _buildFriendItem(context, friend);
-                  }, childCount: friends.length > 3 ? 4 : friends.length),
+                  delegate: SliverChildBuilderDelegate(
+                    (context, index) {
+                      final showLimit = 3;
+                      final hasMoreFriends = friends.length > showLimit;
+
+                      if (_isExpanded) {
+                        // Show all friends + "Show less" button at the end
+                        if (index < friends.length) {
+                          return _buildFriendItem(context, friends[index]);
+                        } else if (index == friends.length && hasMoreFriends) {
+                          return _buildToggleButton(context, isExpanded: true);
+                        }
+                        return SizedBox.shrink();
+                      } else {
+                        // Show only first 3, then "See more" button
+                        if (index < showLimit && index < friends.length) {
+                          return _buildFriendItem(context, friends[index]);
+                        } else if (index == showLimit && hasMoreFriends) {
+                          return _buildToggleButton(context, isExpanded: false);
+                        }
+                        return SizedBox.shrink();
+                      }
+                    },
+                    childCount: _isExpanded
+                        ? friends.length + (friends.length > 3 ? 1 : 0)
+                        : (friends.length > 3 ? 4 : friends.length),
+                  ),
                 );
               },
               loading: () => SliverToBoxAdapter(
@@ -422,22 +446,42 @@ class FriendScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSeeMoreButton(BuildContext context) {
+  Widget _buildToggleButton(BuildContext context, {required bool isExpanded}) {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
       child: Center(
-        child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
-          decoration: BoxDecoration(
-            color: AppColors.gray100,
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Text(
-            'See more',
-            style: TextStyle(
-              fontSize: 14,
-              fontWeight: FontWeight.w500,
-              color: AppColors.black900,
+        child: GestureDetector(
+          onTap: () {
+            setState(() {
+              _isExpanded = !_isExpanded;
+            });
+          },
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppColors.gray100,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  isExpanded ? 'Show less' : 'See more',
+                  style: TextStyle(
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                    color: AppColors.black900,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(
+                  isExpanded
+                      ? Icons.keyboard_arrow_up
+                      : Icons.keyboard_arrow_down,
+                  size: 18,
+                  color: AppColors.black900,
+                ),
+              ],
             ),
           ),
         ),

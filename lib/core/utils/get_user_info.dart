@@ -16,19 +16,25 @@ base mixin GetUserInfo {
   }
 
   List<String> getHobbies(List<Map<String, dynamic>> hobbies) {
-    print(hobbies);
-    final realHobbies = hobbies.first['hobbies'] as List;
-    print('data type of realhobbbies: ${realHobbies.runtimeType}');
-    print('value of realhobbies: $realHobbies');
-    print(
-      'datatype of first item realhobbies: ${realHobbies.first.runtimeType}',
-    );
-    return realHobbies.map((e) {
-      return switch (e) {
-        {'name': String name} => name,
-        _ => '',
-      };
-    }).toList();
+    try {
+      if (hobbies.isEmpty) return [];
+      final hobbyData = hobbies.first['hobbies'];
+      if (hobbyData == null || hobbyData is! List || hobbyData.isEmpty) {
+        return [];
+      }
+      return hobbyData
+          .map<String>((e) {
+            return switch (e) {
+              {'name': String name} => name,
+              _ => '',
+            };
+          })
+          .where((s) => s.isNotEmpty)
+          .toList();
+    } catch (e) {
+      print('Error parsing hobbies: $e');
+      return [];
+    }
   }
 
   ({
