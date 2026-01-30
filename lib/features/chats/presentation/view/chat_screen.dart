@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lockmess/core/constants/colors.dart';
+import 'package:lockmess/core/services/presence_service.dart';
 import 'package:lockmess/features/chats/presentation/viewmodel/chat_provider.dart';
 import 'package:lockmess/features/chats/presentation/widgets/message_bubble.dart';
 
@@ -129,29 +130,86 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 // Name and Online status
                 Expanded(
                   child: conversationAsync.when(
-                    data: (conversation) => Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          conversation?.displayName ?? 'Chat',
-                          style: TextStyle(
-                            color: AppColors.black900,
-                            fontSize: 16,
-                            fontWeight: FontWeight.w600,
+                    data: (conversation) {
+                      // Get other user's ID for presence check
+                      final otherUserId = conversation?.otherUser?.id;
+
+                      return Column(
+                        mainAxisSize: MainAxisSize.min,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            conversation?.displayName ?? 'Chat',
+                            style: TextStyle(
+                              color: AppColors.black900,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Online',
-                          style: TextStyle(
-                            color: AppColors.gray400,
-                            fontSize: 12,
-                          ),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(height: 2),
+                          if (otherUserId != null &&
+                              conversation?.isDirect == true)
+                            Consumer(
+                              builder: (context, ref, _) {
+                                final presenceAsync = ref.watch(
+                                  userPresenceProvider(otherUserId),
+                                );
+                                return presenceAsync.when(
+                                  data: (isOnline) => Row(
+                                    children: [
+                                      Container(
+                                        width: 8,
+                                        height: 8,
+                                        decoration: BoxDecoration(
+                                          color: isOnline
+                                              ? AppColors.green500
+                                              : AppColors.gray400,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        isOnline ? 'Online' : 'Offline',
+                                        style: TextStyle(
+                                          color: isOnline
+                                              ? AppColors.green500
+                                              : AppColors.gray400,
+                                          fontSize: 12,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                  loading: () => Text(
+                                    'Connecting...',
+                                    style: TextStyle(
+                                      color: AppColors.gray400,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  error: (_, __) => Text(
+                                    'Offline',
+                                    style: TextStyle(
+                                      color: AppColors.gray400,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                );
+                              },
+                            )
+                          else
+                            Text(
+                              conversation?.isMultiUser == true
+                                  ? '${conversation?.memberCount ?? 0} members'
+                                  : 'Offline',
+                              style: TextStyle(
+                                color: AppColors.gray400,
+                                fontSize: 12,
+                              ),
+                            ),
+                        ],
+                      );
+                    },
                     loading: () => Text('Loading...'),
                     error: (_, __) => Text('Chat'),
                   ),

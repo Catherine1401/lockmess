@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lockmess/core/constants/colors.dart';
+import 'package:lockmess/core/services/presence_service.dart';
 import 'package:lockmess/features/settings/presentation/view/settings_screen.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:simple_gradient_text/simple_gradient_text.dart';
@@ -21,16 +22,37 @@ class BottomNavNotifier extends Notifier<int> {
   }
 }
 
-class RootScreen extends ConsumerWidget {
+class RootScreen extends ConsumerStatefulWidget {
   const RootScreen({super.key, required this.navigationShell});
 
   final StatefulNavigationShell navigationShell;
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<RootScreen> createState() => _RootScreenState();
+}
+
+class _RootScreenState extends ConsumerState<RootScreen> {
+  @override
+  void initState() {
+    super.initState();
+    // Start presence tracking when app opens
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(presenceServiceProvider).startTracking();
+    });
+  }
+
+  @override
+  void dispose() {
+    // Stop tracking when leaving
+    ref.read(presenceServiceProvider).stopTracking();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       appBar: _buildAppBar(context),
-      body: navigationShell,
+      body: widget.navigationShell,
       bottomNavigationBar: Container(
         height: 84,
         padding: EdgeInsets.only(top: 13),
@@ -87,7 +109,7 @@ class RootScreen extends ConsumerWidget {
       child: Material(
         child: InkResponse(
           onTap: () {
-            navigationShell.goBranch(index);
+            widget.navigationShell.goBranch(index);
             ref.read(bottomNavProvider.notifier).changeTab(index);
           },
           child: Column(
