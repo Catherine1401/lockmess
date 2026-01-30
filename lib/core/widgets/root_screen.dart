@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:lockmess/core/constants/colors.dart';
+import 'package:lockmess/features/settings/presentation/view/settings_screen.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 import 'package:simple_gradient_text/simple_gradient_text.dart';
 
@@ -168,7 +169,7 @@ class RootScreen extends ConsumerWidget {
         Material(
           color: Colors.transparent,
           child: InkResponse(
-            onTap: () {},
+            onTap: () => showSettingsDrawer(context),
             radius: 60,
             child: Padding(
               padding: const EdgeInsets.all(8.0),
