@@ -10,6 +10,7 @@ final class AppColors {
   static const green500 = Color(0xFF73CCB4);
   static const green450 = Color(0xFFD5FCD5);
   static const green600 = Color(0xFF70E196);
+  static const green100 = Color(0xFFE8F5E9); // Light mint for sent messages
   static const black900 = Color(0xFF000000);
   static const black800 = Color(0xFF1A0F01);
   static const black200 = Color(0xFFC3C3C4);

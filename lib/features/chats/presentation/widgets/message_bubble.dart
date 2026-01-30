@@ -1,4 +1,3 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:lockmess/core/constants/colors.dart';
@@ -19,68 +18,58 @@ class MessageBubble extends StatelessWidget {
     final time = DateFormat('HH:mm').format(message.createdAt);
 
     return Padding(
-      padding: const EdgeInsets.only(bottom: 12),
-      child: Row(
-        mainAxisAlignment: message.isMine
-            ? MainAxisAlignment.end
-            : MainAxisAlignment.start,
-        crossAxisAlignment: CrossAxisAlignment.end,
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Column(
+        crossAxisAlignment: message.isMine
+            ? CrossAxisAlignment.end
+            : CrossAxisAlignment.start,
         children: [
-          // Avatar for received messages
-          if (!message.isMine)
-            Padding(
-              padding: const EdgeInsets.only(right: 8),
-              child: showAvatar
-                  ? CircleAvatar(
-                      radius: 16,
-                      backgroundImage: CachedNetworkImageProvider(
-                        message.senderAvatar.isNotEmpty
-                            ? message.senderAvatar
-                            : 'https://github.com/shadcn.png',
-                      ),
-                    )
-                  : SizedBox(width: 32),
-            ),
-
-          // Message bubble
-          Flexible(
-            child: Column(
-              crossAxisAlignment: message.isMine
-                  ? CrossAxisAlignment.end
-                  : CrossAxisAlignment.start,
-              children: [
-                Container(
+          Row(
+            mainAxisAlignment: message.isMine
+                ? MainAxisAlignment.end
+                : MainAxisAlignment.start,
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              // Message bubble
+              Flexible(
+                child: Container(
+                  constraints: BoxConstraints(
+                    maxWidth: MediaQuery.of(context).size.width * 0.7,
+                  ),
                   padding: const EdgeInsets.symmetric(
                     horizontal: 16,
                     vertical: 10,
                   ),
                   decoration: BoxDecoration(
                     color: message.isMine
-                        ? AppColors.green500
-                        : Color(0xFFF0F0F0),
-                    borderRadius: BorderRadius.only(
-                      topLeft: Radius.circular(message.isMine ? 16 : 4),
-                      topRight: Radius.circular(message.isMine ? 4 : 16),
-                      bottomLeft: Radius.circular(16),
-                      bottomRight: Radius.circular(16),
-                    ),
+                        ? AppColors
+                              .green100 // Light green for sent
+                        : AppColors.green400, // Green for received
+                    borderRadius: BorderRadius.circular(20),
                   ),
                   child: Text(
                     message.content,
                     style: TextStyle(
                       color: message.isMine
-                          ? AppColors.white900
-                          : AppColors.black900,
-                      fontSize: 15,
+                          ? AppColors.black900
+                          : AppColors.white900,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w400,
                     ),
                   ),
                 ),
-                const SizedBox(height: 4),
-                Text(
-                  time,
-                  style: TextStyle(fontSize: 11, color: AppColors.gray400),
-                ),
-              ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 4),
+          Padding(
+            padding: EdgeInsets.only(
+              left: message.isMine ? 0 : 8,
+              right: message.isMine ? 8 : 0,
+            ),
+            child: Text(
+              time,
+              style: TextStyle(fontSize: 11, color: AppColors.gray400),
             ),
           ),
         ],

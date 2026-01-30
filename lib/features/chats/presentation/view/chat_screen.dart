@@ -2,7 +2,6 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:intl/intl.dart';
 import 'package:lockmess/core/constants/colors.dart';
 import 'package:lockmess/features/chats/presentation/viewmodel/chat_provider.dart';
 import 'package:lockmess/features/chats/presentation/widgets/message_bubble.dart';
@@ -19,18 +18,30 @@ class ChatScreen extends ConsumerStatefulWidget {
 class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
+  bool _showAttachmentMenu = false;
+  bool _hasText = false;
 
   @override
   void initState() {
     super.initState();
-    // Mark as read when entering chat
+    _messageController.addListener(_onTextChanged);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(chatControllerProvider).markAsRead(widget.conversationId);
     });
   }
 
+  void _onTextChanged() {
+    final hasText = _messageController.text.trim().isNotEmpty;
+    if (hasText != _hasText) {
+      setState(() {
+        _hasText = hasText;
+      });
+    }
+  }
+
   @override
   void dispose() {
+    _messageController.removeListener(_onTextChanged);
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -55,9 +66,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         .sendMessage(widget.conversationId, content);
     _messageController.clear();
 
-    // Scroll to bottom after sending
     Future.delayed(const Duration(milliseconds: 100), () {
       _scrollToBottom();
+    });
+  }
+
+  void _toggleAttachmentMenu() {
+    setState(() {
+      _showAttachmentMenu = !_showAttachmentMenu;
     });
   }
 
@@ -70,170 +86,307 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     return Scaffold(
       backgroundColor: AppColors.white900,
-      appBar: AppBar(
-        backgroundColor: AppColors.white900,
-        elevation: 0,
-        leading: IconButton(
-          icon: Icon(Icons.arrow_back, color: AppColors.black900),
-          onPressed: () => context.pop(),
-        ),
-        title: conversationAsync.when(
-          data: (conversation) => Row(
-            children: [
-              CircleAvatar(
-                radius: 20,
-                backgroundImage: CachedNetworkImageProvider(
-                  conversation?.displayAvatar.isNotEmpty == true
-                      ? conversation!.displayAvatar
-                      : 'https://github.com/shadcn.png',
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  conversation?.displayName ?? 'Chat',
-                  style: TextStyle(
-                    color: AppColors.black900,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            ],
-          ),
-          loading: () => Row(
-            children: [
-              CircleAvatar(radius: 20),
-              const SizedBox(width: 12),
-              Text(
-                'Loading...',
-                style: TextStyle(
-                  color: AppColors.black900,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-          error: (_, __) => Row(
-            children: [
-              CircleAvatar(radius: 20),
-              const SizedBox(width: 12),
-              Text(
-                'Chat',
-                style: TextStyle(
-                  color: AppColors.black900,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: Icon(Icons.more_vert, color: AppColors.black900),
-            onPressed: () {
-              // Show options
-            },
-          ),
-        ],
-      ),
-      body: Column(
-        children: [
-          // Messages list
-          Expanded(
-            child: messagesAsync.when(
-              data: (messages) {
-                if (messages.isEmpty) {
-                  return Center(
-                    child: Text(
-                      'No messages yet',
-                      style: TextStyle(color: AppColors.gray400),
-                    ),
-                  );
-                }
-
-                // Scroll to bottom when messages update
-                WidgetsBinding.instance.addPostFrameCallback((_) {
-                  _scrollToBottom();
-                });
-
-                return ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.all(16),
-                  itemCount: messages.length,
-                  itemBuilder: (context, index) {
-                    final message = messages[index];
-                    final showAvatar =
-                        !message.isMine &&
-                        (index == messages.length - 1 ||
-                            messages[index + 1].senderId != message.senderId);
-
-                    return MessageBubble(
-                      message: message,
-                      showAvatar: showAvatar,
-                    );
-                  },
-                );
-              },
-              loading: () => Center(child: CircularProgressIndicator()),
-              error: (e, st) => Center(
-                child: Text(
-                  'Error loading messages',
-                  style: TextStyle(color: Colors.red),
-                ),
-              ),
-            ),
-          ),
-
-          // Input bar
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-            decoration: BoxDecoration(
-              color: AppColors.white900,
-              border: Border(
-                top: BorderSide(color: AppColors.gray100, width: 1),
-              ),
-            ),
+      appBar: PreferredSize(
+        preferredSize: const Size.fromHeight(70),
+        child: SafeArea(
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
             child: Row(
               children: [
+                // Back button
                 IconButton(
                   icon: Icon(
-                    Icons.add_circle_outline,
-                    color: AppColors.gray400,
+                    Icons.chevron_left,
+                    color: AppColors.green500,
+                    size: 32,
                   ),
-                  onPressed: () {
-                    // Handle attachments
-                  },
+                  onPressed: () => context.pop(),
                 ),
-                Expanded(
-                  child: TextField(
-                    controller: _messageController,
-                    decoration: InputDecoration(
-                      hintText: 'type message',
-                      hintStyle: TextStyle(
-                        color: AppColors.gray400,
-                        fontSize: 15,
-                      ),
-                      border: InputBorder.none,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 16,
-                        vertical: 10,
+
+                // Avatar with green border
+                conversationAsync.when(
+                  data: (conversation) => Container(
+                    padding: const EdgeInsets.all(2),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.green500, width: 2),
+                    ),
+                    child: CircleAvatar(
+                      radius: 20,
+                      backgroundImage: CachedNetworkImageProvider(
+                        conversation?.displayAvatar.isNotEmpty == true
+                            ? conversation!.displayAvatar
+                            : 'https://github.com/shadcn.png',
                       ),
                     ),
-                    maxLines: null,
-                    textInputAction: TextInputAction.send,
-                    onSubmitted: (_) => _sendMessage(),
+                  ),
+                  loading: () => CircleAvatar(radius: 22),
+                  error: (_, __) => CircleAvatar(radius: 22),
+                ),
+
+                const SizedBox(width: 12),
+
+                // Name and Online status
+                Expanded(
+                  child: conversationAsync.when(
+                    data: (conversation) => Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          conversation?.displayName ?? 'Chat',
+                          style: TextStyle(
+                            color: AppColors.black900,
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        const SizedBox(height: 2),
+                        Text(
+                          'Online',
+                          style: TextStyle(
+                            color: AppColors.gray400,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                    loading: () => Text('Loading...'),
+                    error: (_, __) => Text('Chat'),
                   ),
                 ),
+
+                // 3-dot menu
                 IconButton(
-                  icon: Icon(Icons.send, color: AppColors.green500),
-                  onPressed: _sendMessage,
+                  icon: Icon(Icons.more_vert, color: AppColors.black900),
+                  onPressed: () {},
                 ),
               ],
             ),
+          ),
+        ),
+      ),
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              // Messages list
+              Expanded(
+                child: messagesAsync.when(
+                  data: (messages) {
+                    if (messages.isEmpty) {
+                      return Center(
+                        child: Text(
+                          'No messages yet',
+                          style: TextStyle(color: AppColors.gray400),
+                        ),
+                      );
+                    }
+
+                    WidgetsBinding.instance.addPostFrameCallback((_) {
+                      _scrollToBottom();
+                    });
+
+                    return ListView.builder(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 8,
+                      ),
+                      itemCount: messages.length,
+                      itemBuilder: (context, index) {
+                        final message = messages[index];
+                        return MessageBubble(
+                          message: message,
+                          showAvatar: false,
+                        );
+                      },
+                    );
+                  },
+                  loading: () => Center(child: CircularProgressIndicator()),
+                  error: (e, st) => Center(
+                    child: Text(
+                      'Error loading messages',
+                      style: TextStyle(color: Colors.red),
+                    ),
+                  ),
+                ),
+              ),
+
+              // Input bar
+              Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 12,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(color: AppColors.white900),
+                child: Row(
+                  children: [
+                    // X / Close button
+                    GestureDetector(
+                      onTap: _toggleAttachmentMenu,
+                      child: Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: _showAttachmentMenu
+                              ? AppColors.gray400
+                              : Colors.transparent,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          _showAttachmentMenu ? Icons.close : Icons.add,
+                          color: _showAttachmentMenu
+                              ? AppColors.white900
+                              : AppColors.gray400,
+                          size: 20,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Message input
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        decoration: BoxDecoration(
+                          color: AppColors.gray100,
+                          borderRadius: BorderRadius.circular(24),
+                        ),
+                        child: TextField(
+                          controller: _messageController,
+                          decoration: InputDecoration(
+                            hintText: 'Type Message',
+                            hintStyle: TextStyle(
+                              color: AppColors.gray400,
+                              fontSize: 14,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: const EdgeInsets.symmetric(
+                              vertical: 12,
+                            ),
+                          ),
+                          style: TextStyle(fontSize: 14),
+                          maxLines: null,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (_) => _sendMessage(),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+
+                    // Send button
+                    GestureDetector(
+                      onTap: _hasText ? _sendMessage : null,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 200),
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: _hasText
+                              ? AppColors.green500
+                              : AppColors.gray200,
+                          shape: BoxShape.circle,
+                        ),
+                        child: Icon(
+                          Icons.send,
+                          color: _hasText
+                              ? AppColors.white900
+                              : AppColors.gray400,
+                          size: 18,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+
+          // Attachment menu popup
+          if (_showAttachmentMenu)
+            Positioned(
+              bottom: 70,
+              left: 16,
+              child: Container(
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
+                decoration: BoxDecoration(
+                  color: AppColors.white900,
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.1),
+                      blurRadius: 10,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _buildAttachmentOption(
+                      icon: Icons.attach_file,
+                      label: 'Share a file',
+                      onTap: () {},
+                    ),
+                    const SizedBox(height: 12),
+                    _buildAttachmentOption(
+                      icon: Icons.location_on_outlined,
+                      label: 'Location',
+                      onTap: () {},
+                    ),
+                    const SizedBox(height: 12),
+                    _buildAttachmentOption(
+                      icon: Icons.camera_alt_outlined,
+                      label: 'Camera',
+                      onTap: () {},
+                    ),
+                    const SizedBox(height: 12),
+                    _buildAttachmentOption(
+                      icon: Icons.image_outlined,
+                      label: 'Images',
+                      onTap: () {},
+                    ),
+                    const SizedBox(height: 12),
+                    _buildAttachmentOption(
+                      icon: Icons.mic_outlined,
+                      label: 'Voices',
+                      onTap: () {},
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAttachmentOption({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: () {
+        onTap();
+        setState(() {
+          _showAttachmentMenu = false;
+        });
+      },
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: AppColors.gray400, size: 20),
+          const SizedBox(width: 12),
+          Text(
+            label,
+            style: TextStyle(color: AppColors.black900, fontSize: 14),
           ),
         ],
       ),
