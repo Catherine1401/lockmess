@@ -17,6 +17,8 @@ class GroupsScreen extends ConsumerStatefulWidget {
 class _GroupsScreenState extends ConsumerState<GroupsScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
 
   @override
   void initState() {
@@ -27,6 +29,7 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -52,7 +55,6 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
       body: SafeArea(
         child: Column(
           children: [
-            // Search bar
             Padding(
               padding: const EdgeInsets.all(16.0),
               child: Container(
@@ -61,7 +63,13 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
                   borderRadius: BorderRadius.circular(50),
                 ),
                 child: TextField(
+                  controller: _searchController,
                   style: TextStyle(color: AppColors.white900),
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value.toLowerCase();
+                    });
+                  },
                   decoration: InputDecoration(
                     hintText: 'Search groups...',
                     hintStyle: TextStyle(
@@ -69,6 +77,17 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
                       fontSize: 16,
                     ),
                     prefixIcon: Icon(Icons.search, color: AppColors.white900),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.clear, color: AppColors.white900),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _searchQuery = '';
+                              });
+                            },
+                          )
+                        : null,
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 20,
@@ -98,8 +117,9 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
                 children: [
                   _buildConversationsList(
                     ref.watch(groupConversationsProvider),
+                    _searchQuery,
                   ),
-                  _buildChannelsTab(),
+                  _buildChannelsTab(_searchQuery),
                 ],
               ),
             ),
@@ -114,27 +134,55 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
     );
   }
 
-  Widget _buildConversationsList(AsyncValue conversationsAsync) {
+  Widget _buildConversationsList(
+    AsyncValue conversationsAsync,
+    String searchQuery,
+  ) {
     return conversationsAsync.when(
       data: (conversations) {
-        if (conversations.isEmpty) {
+        // Apply search filter
+        var filteredConvs = List.from(conversations);
+        if (searchQuery.isNotEmpty) {
+          filteredConvs = filteredConvs.where((c) {
+            final nameMatch = c.displayName.toLowerCase().contains(searchQuery);
+            final messageMatch =
+                c.lastMessageContent?.toLowerCase().contains(searchQuery) ??
+                false;
+            return nameMatch || messageMatch;
+          }).toList();
+        }
+
+        if (filteredConvs.isEmpty) {
           return Center(
-            child: Text(
-              'No groups yet',
-              style: ShadTheme.of(
-                context,
-              ).textTheme.h4.copyWith(color: AppColors.gray400),
+            child: Column(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (searchQuery.isNotEmpty) ...[
+                  Icon(Icons.search_off, size: 48, color: AppColors.gray300),
+                  const SizedBox(height: 16),
+                  Text(
+                    'No groups found for "$searchQuery"',
+                    style: TextStyle(color: AppColors.gray400, fontSize: 16),
+                  ),
+                ] else
+                  Text(
+                    'No groups yet',
+                    style: ShadTheme.of(
+                      context,
+                    ).textTheme.h4.copyWith(color: AppColors.gray400),
+                  ),
+              ],
             ),
           );
         }
 
         return ListView.separated(
           padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: conversations.length,
+          itemCount: filteredConvs.length,
           separatorBuilder: (_, __) =>
               Divider(height: 1, color: AppColors.gray100, indent: 76),
           itemBuilder: (context, index) {
-            final conv = conversations[index];
+            final conv = filteredConvs[index];
             return ListTile(
               contentPadding: const EdgeInsets.symmetric(
                 vertical: 12,
@@ -151,14 +199,14 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
               title: Row(
                 children: [
                   Expanded(
-                    child: Text(
+                    child: _buildHighlightedText(
                       conv.displayName,
-                      style: TextStyle(
+                      searchQuery,
+                      TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 16,
+                        color: AppColors.black900,
                       ),
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
                     ),
                   ),
                   // Show member count badge
@@ -190,11 +238,10 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
                     ),
                 ],
               ),
-              subtitle: Text(
+              subtitle: _buildHighlightedText(
                 conv.lastMessageContent ?? 'No messages yet',
-                style: TextStyle(color: AppColors.gray400, fontSize: 14),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
+                searchQuery,
+                TextStyle(color: AppColors.gray400, fontSize: 14),
               ),
               trailing: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -263,7 +310,7 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
     );
   }
 
-  Widget _buildChannelsTab() {
+  Widget _buildChannelsTab(String searchQuery) {
     final myChannelsAsync = ref.watch(channelConversationsProvider);
     final recommendedAsync = ref.watch(recommendedChannelsProvider);
 
@@ -401,6 +448,58 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
           context.push('/channel/${conv.id}');
         }
       },
+    );
+  }
+
+  Widget _buildHighlightedText(
+    String text,
+    String query,
+    TextStyle baseStyle, {
+    int maxLines = 1,
+  }) {
+    if (query.isEmpty) {
+      return Text(
+        text,
+        style: baseStyle,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    final textLower = text.toLowerCase();
+    final index = textLower.indexOf(query);
+
+    if (index == -1) {
+      return Text(
+        text,
+        style: baseStyle,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    return RichText(
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        children: [
+          if (index > 0)
+            TextSpan(text: text.substring(0, index), style: baseStyle),
+          TextSpan(
+            text: text.substring(index, index + query.length),
+            style: baseStyle.copyWith(
+              fontWeight: FontWeight.bold,
+              color: AppColors.green500,
+              backgroundColor: AppColors.green100,
+            ),
+          ),
+          if (index + query.length < text.length)
+            TextSpan(
+              text: text.substring(index + query.length),
+              style: baseStyle,
+            ),
+        ],
+      ),
     );
   }
 }

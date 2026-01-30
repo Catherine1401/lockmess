@@ -7,8 +7,22 @@ import 'package:lockmess/core/constants/colors.dart';
 import 'package:lockmess/features/chats/presentation/viewmodel/chat_provider.dart';
 import 'package:shadcn_ui/shadcn_ui.dart';
 
-class ChatsScreen extends ConsumerWidget {
+class ChatsScreen extends ConsumerStatefulWidget {
   const ChatsScreen({super.key});
+
+  @override
+  ConsumerState<ChatsScreen> createState() => _ChatsScreenState();
+}
+
+class _ChatsScreenState extends ConsumerState<ChatsScreen> {
+  final TextEditingController _searchController = TextEditingController();
+  String _searchQuery = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
 
   String _formatTimestamp(DateTime? timestamp) {
     if (timestamp == null) return '';
@@ -26,7 +40,7 @@ class ChatsScreen extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     // Only show direct conversations
     final conversationsAsync = ref.watch(conversationsProvider);
 
@@ -44,7 +58,13 @@ class ChatsScreen extends ConsumerWidget {
                   borderRadius: BorderRadius.circular(50),
                 ),
                 child: TextField(
+                  controller: _searchController,
                   style: TextStyle(color: AppColors.white900),
+                  onChanged: (value) {
+                    setState(() {
+                      _searchQuery = value.toLowerCase();
+                    });
+                  },
                   decoration: InputDecoration(
                     hintText: 'Search for a chat...',
                     hintStyle: TextStyle(
@@ -52,6 +72,17 @@ class ChatsScreen extends ConsumerWidget {
                       fontSize: 16,
                     ),
                     prefixIcon: Icon(Icons.search, color: AppColors.white900),
+                    suffixIcon: _searchQuery.isNotEmpty
+                        ? IconButton(
+                            icon: Icon(Icons.clear, color: AppColors.white900),
+                            onPressed: () {
+                              _searchController.clear();
+                              setState(() {
+                                _searchQuery = '';
+                              });
+                            },
+                          )
+                        : null,
                     border: InputBorder.none,
                     contentPadding: const EdgeInsets.symmetric(
                       horizontal: 20,
@@ -67,17 +98,52 @@ class ChatsScreen extends ConsumerWidget {
               child: conversationsAsync.when(
                 data: (conversations) {
                   // Filter only direct conversations
-                  final directConvs = conversations
+                  var directConvs = conversations
                       .where((c) => c.isDirect)
                       .toList();
 
+                  // Apply search filter
+                  if (_searchQuery.isNotEmpty) {
+                    directConvs = directConvs.where((c) {
+                      final nameMatch = c.displayName.toLowerCase().contains(
+                        _searchQuery,
+                      );
+                      final messageMatch =
+                          c.lastMessageContent?.toLowerCase().contains(
+                            _searchQuery,
+                          ) ??
+                          false;
+                      return nameMatch || messageMatch;
+                    }).toList();
+                  }
+
                   if (directConvs.isEmpty) {
                     return Center(
-                      child: Text(
-                        'No conversations yet',
-                        style: ShadTheme.of(
-                          context,
-                        ).textTheme.h4.copyWith(color: AppColors.gray400),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          if (_searchQuery.isNotEmpty) ...[
+                            Icon(
+                              Icons.search_off,
+                              size: 48,
+                              color: AppColors.gray300,
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'No chats found for "$_searchQuery"',
+                              style: TextStyle(
+                                color: AppColors.gray400,
+                                fontSize: 16,
+                              ),
+                            ),
+                          ] else
+                            Text(
+                              'No conversations yet',
+                              style: ShadTheme.of(
+                                context,
+                              ).textTheme.h4.copyWith(color: AppColors.gray400),
+                            ),
+                        ],
                       ),
                     );
                   }
@@ -105,23 +171,20 @@ class ChatsScreen extends ConsumerWidget {
                                 : 'https://github.com/shadcn.png',
                           ),
                         ),
-                        title: Text(
+                        title: _buildHighlightedText(
                           conv.displayName,
-                          style: TextStyle(
+                          _searchQuery,
+                          TextStyle(
                             fontWeight: FontWeight.w600,
                             fontSize: 16,
+                            color: AppColors.black900,
                           ),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
-                        subtitle: Text(
+                        subtitle: _buildHighlightedText(
                           conv.lastMessageContent ?? 'No messages yet',
-                          style: TextStyle(
-                            color: AppColors.gray400,
-                            fontSize: 14,
-                          ),
+                          _searchQuery,
+                          TextStyle(color: AppColors.gray400, fontSize: 14),
                           maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
                         ),
                         trailing: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
@@ -168,6 +231,58 @@ class ChatsScreen extends ConsumerWidget {
             ),
           ],
         ),
+      ),
+    );
+  }
+
+  Widget _buildHighlightedText(
+    String text,
+    String query,
+    TextStyle baseStyle, {
+    int maxLines = 1,
+  }) {
+    if (query.isEmpty) {
+      return Text(
+        text,
+        style: baseStyle,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    final textLower = text.toLowerCase();
+    final index = textLower.indexOf(query);
+
+    if (index == -1) {
+      return Text(
+        text,
+        style: baseStyle,
+        maxLines: maxLines,
+        overflow: TextOverflow.ellipsis,
+      );
+    }
+
+    return RichText(
+      maxLines: maxLines,
+      overflow: TextOverflow.ellipsis,
+      text: TextSpan(
+        children: [
+          if (index > 0)
+            TextSpan(text: text.substring(0, index), style: baseStyle),
+          TextSpan(
+            text: text.substring(index, index + query.length),
+            style: baseStyle.copyWith(
+              fontWeight: FontWeight.bold,
+              color: AppColors.green500,
+              backgroundColor: AppColors.green100,
+            ),
+          ),
+          if (index + query.length < text.length)
+            TextSpan(
+              text: text.substring(index + query.length),
+              style: baseStyle,
+            ),
+        ],
       ),
     );
   }

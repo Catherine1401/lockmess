@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lockmess/core/constants/colors.dart';
 import 'package:lockmess/features/chats/domain/entities/conversation.dart';
+import 'package:lockmess/features/chats/presentation/view/conversation_search_screen.dart';
 
 class GroupChatInfoDrawer extends ConsumerWidget {
   final Conversation conversation;
@@ -136,7 +137,14 @@ class GroupChatInfoDrawer extends ConsumerWidget {
                     _buildMenuItem(
                       icon: Icons.search,
                       label: 'Search',
-                      onTap: () {},
+                      onTap: () {
+                        Navigator.of(context).pop(); // Close drawer
+                        showConversationSearch(
+                          context,
+                          conversation.id,
+                          conversation.name ?? 'Group',
+                        );
+                      },
                     ),
                     const SizedBox(height: 20),
                     _buildMenuItem(
