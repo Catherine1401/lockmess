@@ -43,9 +43,12 @@ class PaginatedConversationsState {
 class PaginatedConversationsMapNotifier
     extends Notifier<Map<String, PaginatedConversationsState>> {
   static const int _pageSize = 20;
+  bool _mounted = true;
 
   @override
   Map<String, PaginatedConversationsState> build() {
+    _mounted = true;
+    ref.onDispose(() => _mounted = false);
     return {};
   }
 
@@ -57,6 +60,8 @@ class PaginatedConversationsMapNotifier
   }
 
   Future<void> loadInitial(String type) async {
+    if (!_mounted) return;
+
     // Set loading state if not present or to update UI
     state = {
       ...state,
@@ -73,6 +78,8 @@ class PaginatedConversationsMapNotifier
         type: type,
       );
 
+      if (!_mounted) return;
+
       state = {
         ...state,
         type: PaginatedConversationsState(
@@ -83,6 +90,7 @@ class PaginatedConversationsMapNotifier
         ),
       };
     } catch (e) {
+      if (!_mounted) return;
       state = {
         ...state,
         type: (state[type] ?? const PaginatedConversationsState()).copyWith(
@@ -94,6 +102,7 @@ class PaginatedConversationsMapNotifier
   }
 
   Future<void> loadMore(String type) async {
+    if (!_mounted) return;
     final currentState = state[type];
     if (currentState == null) return;
 
@@ -114,6 +123,8 @@ class PaginatedConversationsMapNotifier
         type: type,
       );
 
+      if (!_mounted) return;
+
       final nextState = currentState.copyWith(
         conversations: [...currentState.conversations, ...newConversations],
         isLoading: false,
@@ -128,6 +139,7 @@ class PaginatedConversationsMapNotifier
       );
     } catch (e) {
       print('🔴 [Pagination($type)] Error: $e');
+      if (!_mounted) return;
       state = {
         ...state,
         type: currentState.copyWith(isLoading: false, error: e.toString()),
@@ -136,6 +148,7 @@ class PaginatedConversationsMapNotifier
   }
 
   Future<void> refresh(String type) async {
+    if (!_mounted) return;
     state = {
       ...state,
       type: const PaginatedConversationsState(isLoading: true),
@@ -347,11 +360,32 @@ class GroupController {
       ref.read(paginatedConversationsMapProvider.notifier).refresh('channel');
 
       // Keep legacy invalidation if other widgets use it (e.g. recommendations)
-      ref.invalidate(recommendedChannelsProvider);
       ref.invalidate(channelConversationsProvider);
     } catch (e, stackTrace) {
       print('🔴 [GroupController] Error joining channel: $e');
       print('🔴 [GroupController] Stack trace: $stackTrace');
+      rethrow;
+    }
+  }
+
+  Future<void> leaveConversation(String conversationId) async {
+    try {
+      print('🟣 [GroupController] Leaving conversation: $conversationId');
+      await ref
+          .read(conversationRepositoryProvider)
+          .leaveConversation(conversationId);
+
+      print('🟣 [GroupController] Left conversation successfully');
+
+      // Refresh lists
+      ref.invalidate(conversationsProvider);
+      ref.invalidate(conversationsStreamProvider);
+      ref.invalidate(groupConversationsProvider);
+      ref.invalidate(channelConversationsProvider);
+      ref.read(paginatedConversationsMapProvider.notifier).refresh('channel');
+      ref.read(paginatedConversationsMapProvider.notifier).refresh('group');
+    } catch (e) {
+      print('🔴 [GroupController] Error leaving conversation: $e');
       rethrow;
     }
   }

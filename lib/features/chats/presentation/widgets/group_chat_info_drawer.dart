@@ -4,11 +4,58 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lockmess/core/constants/colors.dart';
 import 'package:lockmess/features/chats/domain/entities/conversation.dart';
 import 'package:lockmess/features/chats/presentation/view/conversation_search_screen.dart';
+import 'package:lockmess/features/chats/presentation/viewmodel/chat_provider.dart';
+import 'package:go_router/go_router.dart';
 
 class GroupChatInfoDrawer extends ConsumerWidget {
   final Conversation conversation;
 
   const GroupChatInfoDrawer({super.key, required this.conversation});
+
+  Future<void> _leaveGroup(BuildContext context, WidgetRef ref) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Leave Group'),
+        content: Text('Are you sure you want to leave this group?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Leave', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    try {
+      // Show loading indicator or block user interaction if needed
+      // ensuring we close the drawer first or after?
+      // Usually better to show loading. For simplicity:
+
+      await ref
+          .read(groupControllerProvider)
+          .leaveConversation(conversation.id);
+
+      if (context.mounted) {
+        // Close drawer
+        Navigator.of(context).pop();
+        // Go back to list (pop chat screen)
+        context.go('/group');
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Failed to leave group: $e')));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -162,7 +209,7 @@ class GroupChatInfoDrawer extends ConsumerWidget {
                     _buildMenuItem(
                       icon: Icons.logout,
                       label: 'Leave chat',
-                      onTap: () {},
+                      onTap: () => _leaveGroup(context, ref),
                       isDestructive: true,
                     ),
                     const SizedBox(height: 32),

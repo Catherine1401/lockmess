@@ -61,6 +61,46 @@ class _ChannelProfileScreenState extends ConsumerState<ChannelProfileScreen> {
     }
   }
 
+  Future<void> _leaveChannel() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Leave Channel'),
+        content: Text('Are you sure you want to leave this channel?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: Text('Leave', style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed != true) return;
+
+    setState(() => _isJoining = true);
+
+    try {
+      await ref
+          .read(groupControllerProvider)
+          .leaveConversation(widget.channelId);
+
+      if (mounted) {
+        context.pop(); // Return to previous screen
+      }
+    } catch (e) {
+      _showError('Failed to leave channel: $e');
+    } finally {
+      if (mounted) {
+        setState(() => _isJoining = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final channelAsync = ref.watch(conversationProvider(widget.channelId));
@@ -232,6 +272,27 @@ class _ChannelProfileScreenState extends ConsumerState<ChannelProfileScreen> {
                     ),
                   ),
                 ),
+
+                if (isJoined) ...[
+                  SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: TextButton(
+                      onPressed: _isJoining ? null : _leaveChannel,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.red,
+                        padding: EdgeInsets.symmetric(vertical: 12),
+                      ),
+                      child: Text(
+                        'Leave Channel',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
 
                 SizedBox(height: 32),
 

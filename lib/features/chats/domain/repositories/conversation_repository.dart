@@ -39,5 +39,6 @@ abstract class ConversationRepository {
   Future<List<Conversation>> getRecommendedChannels();
   Future<List<Conversation>> getAllPublicChannels();
   Future<void> joinChannel(String channelId);
+  Future<void> leaveConversation(String conversationId);
   Future<List<String>> getChannelHobbies(String channelId);
 }

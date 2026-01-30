@@ -32,19 +32,21 @@ class RootScreen extends ConsumerStatefulWidget {
 }
 
 class _RootScreenState extends ConsumerState<RootScreen> {
+  late final _presenceService = ref.read(presenceServiceProvider);
+
   @override
   void initState() {
     super.initState();
     // Start presence tracking when app opens
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      ref.read(presenceServiceProvider).startTracking();
+      _presenceService.startTracking();
     });
   }
 
   @override
   void dispose() {
     // Stop tracking when leaving
-    ref.read(presenceServiceProvider).stopTracking();
+    _presenceService.stopTracking();
     super.dispose();
   }
 

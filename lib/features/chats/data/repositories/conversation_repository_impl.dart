@@ -777,6 +777,76 @@ final class ConversationRepositoryImpl
   }
 
   @override
+  Future<void> leaveConversation(String conversationId) async {
+    try {
+      // 1. Check current role and member count
+      final participants = await _supabase.client
+          .from('conversation_participants')
+          .select('user_id, role, joined_at')
+          .eq('conversation_id', conversationId)
+          .order('joined_at', ascending: true); // Oldest first
+
+      final myParticipant = participants.firstWhere(
+        (p) => p['user_id'] == _myId,
+        orElse: () => throw Exception('Not a member of this conversation'),
+      );
+
+      final isOwner =
+          myParticipant['role'] ==
+          'admin'; // Assuming admin = owner for simplicity
+      final memberCount = participants.length;
+
+      if (isOwner) {
+        if (memberCount == 1) {
+          // Case 1: Owner matches only member -> Delete conversation
+          print(
+            '🔵 [Leave] Owner leaving as last member. Deleting conversation...',
+          );
+          // Delete request. Note: RLS might prevent this if not owner, but we checked role.
+          // Deleting conversation should cascade delete participants/messages if FK set.
+          await _supabase.client
+              .from('conversations')
+              .delete()
+              .eq('id', conversationId);
+          return;
+        } else {
+          // Case 2: Owner leaving, others remain -> Transfer ownership
+          print('🔵 [Leave] Owner leaving. Transferring ownership...');
+
+          // Find next oldest member who is NOT me
+          final nextAdmin = participants.firstWhere(
+            (p) => p['user_id'] != _myId,
+          );
+
+          final nextAdminId = nextAdmin['user_id'];
+          print('🔵 [Leave] New admin will be: $nextAdminId');
+
+          // Promote next member to admin
+          await _supabase.client
+              .from('conversation_participants')
+              .update({'role': 'admin'})
+              .eq('conversation_id', conversationId)
+              .eq('user_id', nextAdminId);
+
+          // Update conversation creator if we treat created_by as current owner
+          // await _supabase.client.from('conversations').update({'created_by': nextAdminId}).eq('id', conversationId);
+        }
+      }
+
+      // 3. Leave (Delete participant record)
+      print('🔵 [Leave] Removing participant: $_myId');
+      await _supabase.client
+          .from('conversation_participants')
+          .delete()
+          .eq('conversation_id', conversationId)
+          .eq('user_id', _myId);
+    } catch (e) {
+      print('Error leaving conversation: $e');
+      rethrow;
+    }
+  }
+
+  @override
   Future<List<String>> getChannelHobbies(String channelId) async {
     try {
       final response = await _supabase.client

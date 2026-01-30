@@ -107,8 +107,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
     redirect: (_, state) {
-      print('hello wolrd');
+      print('🔄 [Router] Navigating to: ${state.uri}');
       if (authState.value?.session == null) {
+        print('🔄 [Router] No session, redirecting to /');
         return '/';
       }
       return null;
