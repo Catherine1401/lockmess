@@ -16,12 +16,29 @@ class ChatsScreen extends ConsumerStatefulWidget {
 
 class _ChatsScreenState extends ConsumerState<ChatsScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   String _searchQuery = '';
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _onScroll() {
+    // print('📜 Scroll: ${_scrollController.position.pixels} / ${_scrollController.position.maxScrollExtent}');
+    if (_scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 200) {
+      print('📜 Triggering loadMore!');
+      ref.read(paginatedConversationsProvider.notifier).loadMore();
+    }
   }
 
   String _formatTimestamp(DateTime? timestamp) {
@@ -41,8 +58,10 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Only show direct conversations
-    final conversationsAsync = ref.watch(conversationsProvider);
+    // Use paginated provider for filtered direct chats
+    final paginatedState = ref.watch(paginatedConversationsProvider);
+    final conversations = paginatedState.conversations;
+    final isLoadingInitial = paginatedState.isLoading && conversations.isEmpty;
 
     return Scaffold(
       backgroundColor: AppColors.white900,
@@ -93,141 +112,157 @@ class _ChatsScreenState extends ConsumerState<ChatsScreen> {
               ),
             ),
 
-            // Conversations list (direct only)
+            // Conversations list
             Expanded(
-              child: conversationsAsync.when(
-                data: (conversations) {
-                  // Filter only direct conversations
-                  var directConvs = conversations
-                      .where((c) => c.isDirect)
-                      .toList();
+              child: isLoadingInitial
+                  ? Center(child: CircularProgressIndicator())
+                  : Builder(
+                      builder: (context) {
+                        // Apply LOCAL search filter to loaded items
+                        // Note: Ideally search should be server-side for paginated lists
+                        var filteredConvs = conversations;
+                        if (_searchQuery.isNotEmpty) {
+                          filteredConvs = conversations.where((c) {
+                            final nameMatch = c.displayName
+                                .toLowerCase()
+                                .contains(_searchQuery);
+                            final messageMatch =
+                                c.lastMessageContent?.toLowerCase().contains(
+                                  _searchQuery,
+                                ) ??
+                                false;
+                            return nameMatch || messageMatch;
+                          }).toList();
+                        }
 
-                  // Apply search filter
-                  if (_searchQuery.isNotEmpty) {
-                    directConvs = directConvs.where((c) {
-                      final nameMatch = c.displayName.toLowerCase().contains(
-                        _searchQuery,
-                      );
-                      final messageMatch =
-                          c.lastMessageContent?.toLowerCase().contains(
-                            _searchQuery,
-                          ) ??
-                          false;
-                      return nameMatch || messageMatch;
-                    }).toList();
-                  }
+                        if (filteredConvs.isEmpty) {
+                          return Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                if (_searchQuery.isNotEmpty) ...[
+                                  Icon(
+                                    Icons.search_off,
+                                    size: 48,
+                                    color: AppColors.gray300,
+                                  ),
+                                  const SizedBox(height: 16),
+                                  Text(
+                                    'No chats found for "$_searchQuery"',
+                                    style: TextStyle(
+                                      color: AppColors.gray400,
+                                      fontSize: 16,
+                                    ),
+                                  ),
+                                ] else
+                                  Text(
+                                    'No conversations yet',
+                                    style: ShadTheme.of(context).textTheme.h4
+                                        .copyWith(color: AppColors.gray400),
+                                  ),
+                              ],
+                            ),
+                          );
+                        }
 
-                  if (directConvs.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          if (_searchQuery.isNotEmpty) ...[
-                            Icon(
-                              Icons.search_off,
-                              size: 48,
-                              color: AppColors.gray300,
-                            ),
-                            const SizedBox(height: 16),
-                            Text(
-                              'No chats found for "$_searchQuery"',
-                              style: TextStyle(
-                                color: AppColors.gray400,
-                                fontSize: 16,
-                              ),
-                            ),
-                          ] else
-                            Text(
-                              'No conversations yet',
-                              style: ShadTheme.of(
-                                context,
-                              ).textTheme.h4.copyWith(color: AppColors.gray400),
-                            ),
-                        ],
-                      ),
-                    );
-                  }
-
-                  return ListView.separated(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: directConvs.length,
-                    separatorBuilder: (_, __) => Divider(
-                      height: 1,
-                      color: AppColors.gray100,
-                      indent: 76,
-                    ),
-                    itemBuilder: (context, index) {
-                      final conv = directConvs[index];
-                      return ListTile(
-                        contentPadding: const EdgeInsets.symmetric(
-                          vertical: 12,
-                          horizontal: 4,
-                        ),
-                        leading: CircleAvatar(
-                          radius: 28,
-                          backgroundImage: CachedNetworkImageProvider(
-                            conv.displayAvatar.isNotEmpty
-                                ? conv.displayAvatar
-                                : 'https://github.com/shadcn.png',
+                        return ListView.separated(
+                          controller: _scrollController,
+                          padding: const EdgeInsets.symmetric(horizontal: 16),
+                          // Add +1 item for bottom loading indicator if loading more
+                          itemCount:
+                              filteredConvs.length +
+                              (paginatedState.isLoading &&
+                                      conversations.isNotEmpty
+                                  ? 1
+                                  : 0),
+                          separatorBuilder: (_, __) => Divider(
+                            height: 1,
+                            color: AppColors.gray100,
+                            indent: 76,
                           ),
-                        ),
-                        title: _buildHighlightedText(
-                          conv.displayName,
-                          _searchQuery,
-                          TextStyle(
-                            fontWeight: FontWeight.w600,
-                            fontSize: 16,
-                            color: AppColors.black900,
-                          ),
-                        ),
-                        subtitle: _buildHighlightedText(
-                          conv.lastMessageContent ?? 'No messages yet',
-                          _searchQuery,
-                          TextStyle(color: AppColors.gray400, fontSize: 14),
-                          maxLines: 1,
-                        ),
-                        trailing: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              _formatTimestamp(conv.lastMessageTime),
-                              style: TextStyle(
-                                color: AppColors.gray400,
-                                fontSize: 12,
-                              ),
-                            ),
-                            if (conv.unreadCount > 0) ...[
-                              SizedBox(height: 4),
-                              Container(
-                                padding: EdgeInsets.all(6),
-                                decoration: BoxDecoration(
-                                  color: AppColors.green500,
-                                  shape: BoxShape.circle,
-                                ),
-                                child: Text(
-                                  conv.unreadCount > 99
-                                      ? '99+'
-                                      : '${conv.unreadCount}',
-                                  style: TextStyle(
-                                    color: AppColors.white900,
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
+                          itemBuilder: (context, index) {
+                            if (index == filteredConvs.length) {
+                              return Padding(
+                                padding: const EdgeInsets.all(16.0),
+                                child: Center(
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
                                   ),
                                 ),
+                              );
+                            }
+
+                            final conv = filteredConvs[index];
+                            return ListTile(
+                              contentPadding: const EdgeInsets.symmetric(
+                                vertical: 12,
+                                horizontal: 4,
                               ),
-                            ],
-                          ],
-                        ),
-                        onTap: () => context.push('/chat/${conv.id}'),
-                      );
-                    },
-                  );
-                },
-                loading: () => Center(child: CircularProgressIndicator()),
-                error: (error, _) =>
-                    Center(child: Text('Error loading conversations')),
-              ),
+                              leading: CircleAvatar(
+                                radius: 28,
+                                backgroundImage: CachedNetworkImageProvider(
+                                  conv.displayAvatar.isNotEmpty
+                                      ? conv.displayAvatar
+                                      : 'https://github.com/shadcn.png',
+                                ),
+                              ),
+                              title: _buildHighlightedText(
+                                conv.displayName,
+                                _searchQuery,
+                                TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 16,
+                                  color: AppColors.black900,
+                                ),
+                              ),
+                              subtitle: _buildHighlightedText(
+                                conv.lastMessageContent ?? 'No messages yet',
+                                _searchQuery,
+                                TextStyle(
+                                  color: AppColors.gray400,
+                                  fontSize: 14,
+                                ),
+                                maxLines: 1,
+                              ),
+                              trailing: Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                children: [
+                                  Text(
+                                    _formatTimestamp(conv.lastMessageTime),
+                                    style: TextStyle(
+                                      color: AppColors.gray400,
+                                      fontSize: 12,
+                                    ),
+                                  ),
+                                  if (conv.unreadCount > 0) ...[
+                                    SizedBox(height: 4),
+                                    Container(
+                                      padding: EdgeInsets.all(6),
+                                      decoration: BoxDecoration(
+                                        color: AppColors.green500,
+                                        shape: BoxShape.circle,
+                                      ),
+                                      child: Text(
+                                        conv.unreadCount > 99
+                                            ? '99+'
+                                            : '${conv.unreadCount}',
+                                        style: TextStyle(
+                                          color: AppColors.white900,
+                                          fontSize: 10,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
+                              ),
+                              onTap: () => context.push('/chat/${conv.id}'),
+                            );
+                          },
+                        );
+                      },
+                    ),
             ),
           ],
         ),

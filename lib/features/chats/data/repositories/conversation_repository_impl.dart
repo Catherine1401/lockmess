@@ -84,14 +84,31 @@ final class ConversationRepositoryImpl
   Future<List<Conversation>> getConversations({
     int limit = 20,
     int offset = 0,
+    String? type,
   }) async {
     try {
-      final response = await _supabase.client
+      print('🔵 [getConversations] Fetching for user: $_myId, type: $type');
+      var query = _supabase.client
           .from('user_conversations_view')
           .select()
-          .eq('owner_id', _myId)
-          .order('last_message_time', ascending: false)
+          .eq('owner_id', _myId);
+
+      if (type != null) {
+        query = query.eq('type', type);
+      }
+
+      final response = await query
+          .order('updated_at', ascending: false)
           .range(offset, offset + limit - 1);
+
+      print(
+        '🔵 [getConversations] Got ${(response as List).length} conversations',
+      );
+      for (final conv in response) {
+        print(
+          '🔵 [getConversations] - ${conv['type']}: ${conv['name'] ?? conv['conversation_id']}',
+        );
+      }
 
       return (response as List).map((data) {
         Profile? otherUser;

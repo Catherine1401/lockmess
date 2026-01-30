@@ -1,7 +1,11 @@
 import 'package:lockmess/features/chats/domain/entities/conversation.dart';
 
 abstract class ConversationRepository {
-  Future<List<Conversation>> getConversations();
+  Future<List<Conversation>> getConversations({
+    int limit = 20,
+    int offset = 0,
+    String? type,
+  });
   Future<Conversation> getConversationById(String conversationId);
   Future<Conversation> getOrCreateDirectConversation(String otherUserId);
   Future<void> markAsRead(String conversationId);
