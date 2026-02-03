@@ -19,6 +19,7 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  String? _selectedHobbyId; // null means "All"
 
   @override
   void initState() {
@@ -97,6 +98,9 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
                 ),
               ),
             ),
+
+            // Hobby Filter Chips
+            _buildHobbyChips(),
 
             // Tabs
             TabBar(
@@ -307,6 +311,79 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildHobbyChips() {
+    final hobbiesAsync = ref.watch(hobbiesListProvider);
+
+    return hobbiesAsync.when(
+      data: (hobbies) {
+        return SizedBox(
+          height: 50,
+          child: ListView.builder(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            itemCount: hobbies.length + 1, // +1 for "All" chip
+            itemBuilder: (context, index) {
+              if (index == 0) {
+                // "All" chip
+                final isSelected = _selectedHobbyId == null;
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: FilterChip(
+                    label: Text('All'),
+                    selected: isSelected,
+                    selectedColor: AppColors.green500.withValues(alpha: 0.2),
+                    checkmarkColor: AppColors.green500,
+                    labelStyle: TextStyle(
+                      color: isSelected
+                          ? AppColors.green500
+                          : AppColors.gray400,
+                      fontWeight: isSelected
+                          ? FontWeight.bold
+                          : FontWeight.normal,
+                    ),
+                    onSelected: (_) {
+                      setState(() {
+                        _selectedHobbyId = null;
+                      });
+                    },
+                  ),
+                );
+              }
+
+              final hobby = hobbies[index - 1];
+              final hobbyId = hobby['id'].toString();
+              final hobbyName = hobby['name'] as String;
+              final isSelected = _selectedHobbyId == hobbyId;
+
+              return Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: FilterChip(
+                  label: Text(hobbyName),
+                  selected: isSelected,
+                  selectedColor: AppColors.green500.withValues(alpha: 0.2),
+                  checkmarkColor: AppColors.green500,
+                  labelStyle: TextStyle(
+                    color: isSelected ? AppColors.green500 : AppColors.gray400,
+                    fontWeight: isSelected
+                        ? FontWeight.bold
+                        : FontWeight.normal,
+                  ),
+                  onSelected: (_) {
+                    setState(() {
+                      _selectedHobbyId = isSelected ? null : hobbyId;
+                    });
+                  },
+                ),
+              );
+            },
+          ),
+        );
+      },
+      loading: () => SizedBox(height: 50),
+      error: (_, __) => SizedBox(height: 50),
     );
   }
 

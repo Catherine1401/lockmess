@@ -1,10 +1,10 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter_riverpod/legacy.dart';
 import 'package:lockmess/features/chats/data/repositories/conversation_repository_impl.dart';
 import 'package:lockmess/features/chats/data/repositories/message_repository_impl.dart';
 import 'package:lockmess/features/chats/domain/entities/conversation.dart';
 import 'package:lockmess/features/chats/domain/entities/message.dart';
-import 'package:riverpod/riverpod.dart';
 
 // Pagination State
 class PaginatedConversationsState {
@@ -163,6 +163,131 @@ final paginatedConversationsMapProvider =
       PaginatedConversationsMapNotifier,
       Map<String, PaginatedConversationsState>
     >(PaginatedConversationsMapNotifier.new);
+
+// Paginated Messages State
+class PaginatedMessagesState {
+  final List<Message> messages;
+  final bool isLoading;
+  final bool hasMore;
+  final String? error;
+
+  const PaginatedMessagesState({
+    this.messages = const [],
+    this.isLoading = false,
+    this.hasMore = true,
+    this.error,
+  });
+
+  PaginatedMessagesState copyWith({
+    List<Message>? messages,
+    bool? isLoading,
+    bool? hasMore,
+    String? error,
+  }) {
+    return PaginatedMessagesState(
+      messages: messages ?? this.messages,
+      isLoading: isLoading ?? this.isLoading,
+      hasMore: hasMore ?? this.hasMore,
+      error: error,
+    );
+  }
+}
+
+// Map of conversationId -> PaginatedMessagesNotifier
+final paginatedMessagesProvider = StateNotifierProvider.family
+    .autoDispose<PaginatedMessagesNotifier, PaginatedMessagesState, String>((
+      ref,
+      conversationId,
+    ) {
+      return PaginatedMessagesNotifier(ref, conversationId);
+    });
+
+class PaginatedMessagesNotifier extends StateNotifier<PaginatedMessagesState> {
+  final Ref _ref;
+  final String _conversationId;
+  StreamSubscription? _subscription;
+  static const int _pageSize = 30;
+  bool _isInit = false;
+
+  PaginatedMessagesNotifier(this._ref, this._conversationId)
+    : super(const PaginatedMessagesState());
+
+  @override
+  void dispose() {
+    _subscription?.cancel();
+    super.dispose();
+  }
+
+  Future<void> loadInitial() async {
+    if (_isInit) return;
+    _isInit = true;
+
+    state = state.copyWith(isLoading: true);
+    try {
+      final repo = _ref.read(messageRepositoryProvider);
+
+      // 1. Fetch initial batch (newest first)
+      final messages = await repo.getMessages(
+        _conversationId,
+        limit: _pageSize,
+        offset: 0,
+      );
+
+      state = state.copyWith(
+        messages: messages,
+        isLoading: false,
+        hasMore: messages.length >= _pageSize,
+      );
+
+      // 2. Subscribe to realtime updates
+      _subscribe();
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  Future<void> loadMore() async {
+    if (state.isLoading || !state.hasMore) return;
+
+    state = state.copyWith(isLoading: true);
+    try {
+      final repo = _ref.read(messageRepositoryProvider);
+      final currentLength = state.messages.length;
+
+      final moreMessages = await repo.getMessages(
+        _conversationId,
+        limit: _pageSize,
+        offset: currentLength,
+      );
+
+      state = state.copyWith(
+        messages: [
+          ...state.messages,
+          ...moreMessages,
+        ], // Append to end (since list is reversed in UI)
+        isLoading: false,
+        hasMore: moreMessages.length >= _pageSize,
+      );
+    } catch (e) {
+      state = state.copyWith(isLoading: false, error: e.toString());
+    }
+  }
+
+  void _subscribe() {
+    // Assuming subscribeToNewMessages is available on the implementation
+    final repo = _ref.read(messageRepositoryProvider) as dynamic;
+
+    _subscription = repo.subscribeToNewMessages(_conversationId).listen((
+      newMessage,
+    ) {
+      // Prepend new message (index 0 for reversed list)
+      // Check for duplicates
+      if (state.messages.any((m) => m.id == newMessage.id)) return;
+
+      state = state.copyWith(messages: [newMessage, ...state.messages]);
+    });
+  }
+}
 
 // Simple Conversations provider
 final conversationsProvider = FutureProvider.autoDispose<List<Conversation>>((
@@ -359,8 +484,13 @@ class GroupController {
       // Refresh channels list
       ref.read(paginatedConversationsMapProvider.notifier).refresh('channel');
 
-      // Keep legacy invalidation if other widgets use it (e.g. recommendations)
+      // Invalidate recommendations so channel is removed from discover list
+      ref.invalidate(recommendedChannelsProvider);
+      ref.invalidate(allPublicChannelsProvider);
+
+      // Keep legacy invalidation if other widgets use it
       ref.invalidate(channelConversationsProvider);
+      ref.invalidate(conversationsStreamProvider);
     } catch (e, stackTrace) {
       print('🔴 [GroupController] Error joining channel: $e');
       print('🔴 [GroupController] Stack trace: $stackTrace');
