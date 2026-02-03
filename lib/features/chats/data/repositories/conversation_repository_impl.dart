@@ -494,6 +494,9 @@ final class ConversationRepositoryImpl
 
       // Include current user in members
       final allMemberIds = {...memberIds, _myId}.toList();
+      if (allMemberIds.length < 3) {
+        throw Exception('A group must have at least 3 members (including you)');
+      }
       print('🟢 [Repository] Total members: ${allMemberIds.length}');
       print('🟢 [Repository] Member IDs: $allMemberIds');
 

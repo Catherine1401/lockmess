@@ -21,6 +21,12 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
   bool _isCreating = false;
 
   @override
+  void initState() {
+    super.initState();
+    _groupNameController.addListener(() => setState(() {}));
+  }
+
+  @override
   void dispose() {
     _groupNameController.dispose();
     _searchController.dispose();
@@ -36,9 +42,13 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
       return;
     }
 
-    if (_selectedFriendIds.isEmpty) {
-      print('🔴 [CreateGroupScreen] Validation failed: no members selected');
-      _showError('Please select at least one member');
+    if (_selectedFriendIds.length < 2) {
+      print(
+        '🔴 [CreateGroupScreen] Validation failed: less than 2 members selected',
+      );
+      _showError(
+        'Please select at least 2 other members to create a group (minimum 3 members total)',
+      );
       return;
     }
 
@@ -115,7 +125,7 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
               ),
             ),
             Text(
-              'Add members',
+              'Add at least 2 members',
               style: TextStyle(
                 color: AppColors.white900.withValues(alpha: 0.7),
                 fontSize: 13,
@@ -138,7 +148,13 @@ class _CreateGroupScreenState extends ConsumerState<CreateGroupScreen> {
                 : Text(
                     'Next',
                     style: TextStyle(
-                      color: AppColors.white900,
+                      color: AppColors.white900.withValues(
+                        alpha:
+                            _selectedFriendIds.length >= 2 &&
+                                _groupNameController.text.trim().isNotEmpty
+                            ? 1.0
+                            : 0.5,
+                      ),
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
