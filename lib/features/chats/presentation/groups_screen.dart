@@ -476,7 +476,11 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
                     return SizedBox.shrink(); // Hide unmatched, imperfect but simple
                   }
 
-                  return _buildChannelTile(channel, isJoined: true);
+                  return _buildChannelTile(
+                    channel,
+                    isJoined: true,
+                    searchQuery: searchQuery,
+                  );
                 },
                 childCount:
                     conversations.length +
@@ -517,8 +521,11 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
               }
               return SliverList(
                 delegate: SliverChildBuilderDelegate(
-                  (context, index) =>
-                      _buildChannelTile(channels[index], isJoined: false),
+                  (context, index) => _buildChannelTile(
+                    channels[index],
+                    isJoined: false,
+                    searchQuery: searchQuery,
+                  ),
                   childCount: channels.length,
                 ),
               );
@@ -537,9 +544,13 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
     );
   }
 
-  Widget _buildChannelTile(dynamic conv, {required bool isJoined}) {
+  Widget _buildChannelTile(
+    dynamic conv, {
+    required bool isJoined,
+    String searchQuery = '',
+  }) {
     return ListTile(
-      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+      contentPadding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
       leading: CircleAvatar(
         radius: 28,
         backgroundImage: CachedNetworkImageProvider(
@@ -548,17 +559,64 @@ class _GroupsScreenState extends ConsumerState<GroupsScreen>
               : 'https://github.com/shadcn.png',
         ),
       ),
-      title: Text(
+      title: _buildHighlightedText(
         conv.displayName,
-        style: TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+        searchQuery,
+        TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
       ),
-      subtitle: Text(
-        conv.lastMessageContent ?? 'No messages yet',
-        style: TextStyle(color: AppColors.gray400, fontSize: 14),
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
+      subtitle: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            conv.lastMessageContent ?? 'No messages yet',
+            style: TextStyle(color: AppColors.gray400, fontSize: 14),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (!isJoined) ...[
+            const SizedBox(height: 4),
+            Row(
+              children: [
+                Icon(Icons.people_outline, size: 14, color: AppColors.gray400),
+                const SizedBox(width: 4),
+                Text(
+                  '${conv.memberCount ?? 0} members',
+                  style: TextStyle(color: AppColors.gray400, fontSize: 12),
+                ),
+                if (conv.recentMemberAvatars != null &&
+                    (conv.recentMemberAvatars as List).isNotEmpty) ...[
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    height: 18,
+                    width: 60,
+                    child: Stack(
+                      children: [
+                        for (
+                          var i = 0;
+                          i < (conv.recentMemberAvatars as List).take(3).length;
+                          i++
+                        )
+                          Positioned(
+                            left: i * 14.0,
+                            child: CircleAvatar(
+                              radius: 9,
+                              backgroundColor: AppColors.white900,
+                              child: CircleAvatar(
+                                radius: 8,
+                                backgroundImage: CachedNetworkImageProvider(
+                                  conv.recentMemberAvatars[i],
+                                ),
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ],
+        ],
       ),
       trailing: isJoined
           ? Text(

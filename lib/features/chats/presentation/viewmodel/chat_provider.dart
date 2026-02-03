@@ -1,10 +1,12 @@
 import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_riverpod/legacy.dart';
+import 'package:lockmess/core/network/supabase.dart';
 import 'package:lockmess/features/chats/data/repositories/conversation_repository_impl.dart';
 import 'package:lockmess/features/chats/data/repositories/message_repository_impl.dart';
 import 'package:lockmess/features/chats/domain/entities/conversation.dart';
 import 'package:lockmess/features/chats/domain/entities/message.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 // Pagination State
 class PaginatedConversationsState {
@@ -44,12 +46,47 @@ class PaginatedConversationsMapNotifier
     extends Notifier<Map<String, PaginatedConversationsState>> {
   static const int _pageSize = 20;
   bool _mounted = true;
+  RealtimeChannel? _messagesChannel;
 
   @override
   Map<String, PaginatedConversationsState> build() {
     _mounted = true;
-    ref.onDispose(() => _mounted = false);
+    _setupRealtimeSubscription();
+    ref.onDispose(() {
+      _mounted = false;
+      _removeRealtimeSubscription();
+    });
     return {};
+  }
+
+  void _setupRealtimeSubscription() {
+    final supabaseInstance = ref.read(supabase);
+    _messagesChannel = supabaseInstance.client.channel(
+      'paginated_conversations_messages',
+    );
+    _messagesChannel!
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'messages',
+          callback: (payload) {
+            print(
+              '🔄 [PaginatedConversations] New message detected, refreshing...',
+            );
+            // Refresh all conversation types that are loaded
+            for (final type in state.keys) {
+              refresh(type);
+            }
+          },
+        )
+        .subscribe();
+  }
+
+  void _removeRealtimeSubscription() {
+    if (_messagesChannel != null) {
+      ref.read(supabase).client.removeChannel(_messagesChannel!);
+      _messagesChannel = null;
+    }
   }
 
   // Called by UI to ensure data is loaded
@@ -359,6 +396,11 @@ class ChatController {
   Future<void> markAsRead(String conversationId) async {
     try {
       await ref.read(conversationRepositoryProvider).markAsRead(conversationId);
+      // Refresh conversation lists to update unread count in UI
+      final notifier = ref.read(paginatedConversationsMapProvider.notifier);
+      for (final type in ['direct', 'group', 'channel']) {
+        notifier.refresh(type);
+      }
     } catch (e) {
       print('Error marking as read: $e');
     }

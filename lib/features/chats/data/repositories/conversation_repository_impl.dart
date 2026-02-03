@@ -67,6 +67,17 @@ final class ConversationRepositoryImpl
             if (!controller.isClosed) controller.add(data);
           },
         )
+        .onPostgresChanges(
+          event: PostgresChangeEvent.insert,
+          schema: 'public',
+          table: 'messages',
+          callback: (payload) async {
+            print('New message detected - refreshing conversations');
+            // Refresh conversations list when new message arrives
+            final data = await getConversations();
+            if (!controller.isClosed) controller.add(data);
+          },
+        )
         .subscribe();
 
     // Clean up on cancel

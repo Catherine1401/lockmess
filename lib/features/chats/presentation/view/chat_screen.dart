@@ -272,9 +272,12 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       itemCount: messages.length,
                       itemBuilder: (context, index) {
                         final message = messages[index];
+                        final conversation = conversationAsync.value;
+                        final isGroupChat = conversation?.isMultiUser ?? false;
                         return MessageBubble(
                           message: message,
-                          showAvatar: false,
+                          showAvatar: true,
+                          isGroupChat: isGroupChat,
                         );
                       },
                     );

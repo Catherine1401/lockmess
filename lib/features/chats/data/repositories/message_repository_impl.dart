@@ -85,7 +85,37 @@ final class MessageRepositoryImpl implements MessageRepository {
         .stream(primaryKey: ['id'])
         .eq('conversation_id', conversationId)
         .order('created_at', ascending: true)
-        .map((data) => []); // Placeholder, as we should use pagination now.
+        .asyncMap((data) async {
+          // Fetch sender profiles for each message
+          final messages = <Message>[];
+          for (final item in data) {
+            try {
+              final senderId = item['sender_id'];
+              final profile = await _supabase.client
+                  .from('profiles')
+                  .select('display_name, avatar_url')
+                  .eq('id', senderId)
+                  .maybeSingle();
+
+              messages.add(
+                Message(
+                  id: item['id'],
+                  conversationId: item['conversation_id'],
+                  senderId: senderId,
+                  senderName: profile?['display_name'] ?? 'Unknown',
+                  senderAvatar: profile?['avatar_url'] ?? '',
+                  content: item['content'] ?? '',
+                  type: item['type'] ?? 'text',
+                  createdAt: DateTime.parse(item['created_at']),
+                  isMine: senderId == _myId,
+                ),
+              );
+            } catch (e) {
+              print('Error mapping message: $e');
+            }
+          }
+          return messages;
+        });
   }
 
   Stream<Message> subscribeToNewMessages(String conversationId) {
